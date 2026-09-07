@@ -1,0 +1,2064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>BELTLANDS &mdash; Kettleford</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+<style>
+:root{
+  --pitch:#0d0b09;
+  --soot:#16130f;
+  --plate:#1e1a15;
+  --edge:#332b22;
+  --bone:#e8dcc6;
+  --dust:#9a8f7c;
+  --amber:#e8a327;
+  --rust:#b4502a;
+  --slag:#6f7f5c;
+  --alarm:#c9432b;
+  --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--pitch);color:var(--bone);
+  font-family:var(--mono);font-size:13px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+canvas{display:block}
+#viewport{position:fixed;inset:0;z-index:0}
+button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:none;cursor:pointer}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--soot)}
+::-webkit-scrollbar-thumb{background:var(--edge)}
+::-webkit-scrollbar-thumb:hover{background:var(--rust)}
+
+/* ---------- vitals ---------- */
+#vitals{position:fixed;top:0;left:0;right:0;height:34px;z-index:20;
+  display:flex;align-items:stretch;background:linear-gradient(180deg,#191510,#12100c);
+  border-bottom:1px solid var(--edge);box-shadow:0 2px 10px rgba(0,0,0,.6)}
+.vit{display:flex;align-items:center;gap:7px;padding:0 13px;border-right:1px solid var(--edge);white-space:nowrap}
+.vit .k{color:var(--dust);font-size:10px;letter-spacing:.09em}
+.vit .v{font-size:13px;font-variant-numeric:tabular-nums}
+.vit.warn .v{color:var(--amber)}
+.vit.bad .v{color:var(--alarm)}
+#vspacer{flex:1;border-right:none}
+#vtime{padding-right:14px;color:var(--dust);font-size:11px;display:flex;align-items:center;gap:10px}
+#peerdot{width:7px;height:7px;border-radius:50%;background:#443c30}
+#peerdot.on{background:var(--slag);box-shadow:0 0 6px var(--slag)}
+
+/* ---------- toolbar ---------- */
+#toolbar{position:fixed;bottom:0;left:0;right:0;z-index:20;
+  display:flex;background:linear-gradient(180deg,#12100c,#191510);
+  border-top:1px solid var(--edge)}
+.tool{flex:1;padding:9px 4px 8px;text-align:center;font-size:11px;letter-spacing:.05em;
+  color:var(--dust);border-right:1px solid var(--edge);position:relative;transition:background .1s}
+.tool:last-child{border-right:none}
+.tool:hover{background:#221c15;color:var(--bone)}
+.tool.on{background:#241d14;color:var(--amber);box-shadow:inset 0 2px 0 var(--amber)}
+.tool .hk{display:block;font-size:9px;color:#5f5548;margin-top:1px}
+.tool.on .hk{color:#8a6f38}
+
+/* ---------- panels ---------- */
+.panel{position:fixed;z-index:30;background:#14110d;border:1px solid var(--edge);
+  box-shadow:0 10px 40px rgba(0,0,0,.75);display:none;flex-direction:column}
+.panel.open{display:flex}
+.ph{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--edge);
+  background:#1b1712;flex:0 0 auto}
+.ph h2{font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--bone)}
+.ph .sub{font-size:10px;color:var(--dust);margin-left:auto}
+.px{padding:2px 8px;color:var(--dust);font-size:15px;line-height:1}
+.px:hover{color:var(--alarm)}
+.pb{overflow-y:auto;padding:10px 12px;flex:1 1 auto}
+
+#pBuild{left:0;bottom:38px;width:min(430px,100%);top:36px}
+#pTech{left:50%;top:50%;transform:translate(-50%,-50%);width:min(940px,96vw);height:min(680px,86vh)}
+#pMarket{left:50%;top:50%;transform:translate(-50%,-50%);width:min(860px,96vw);height:min(640px,86vh)}
+#pMap{left:50%;top:50%;transform:translate(-50%,-50%);width:min(780px,96vw);height:min(600px,86vh)}
+#pNet{left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,94vw)}
+#pBlue{left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,94vw)}
+
+/* ---------- build menu ---------- */
+#bcats{display:flex;flex-wrap:wrap;gap:4px;padding:8px 12px;border-bottom:1px solid var(--edge);background:#181410}
+.bcat{padding:4px 9px;font-size:10px;letter-spacing:.06em;color:var(--dust);border:1px solid var(--edge);background:#100e0b}
+.bcat:hover{color:var(--bone);border-color:#4a3f31}
+.bcat.on{background:var(--amber);color:#120e07;border-color:var(--amber)}
+.bitem{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;
+  padding:8px;margin-bottom:5px;background:#191510;border:1px solid #241e17;cursor:pointer}
+.bitem:hover{border-color:var(--amber);background:#1f1a13}
+.bitem.locked{opacity:.4;cursor:not-allowed}
+.bitem.locked:hover{border-color:#241e17;background:#191510}
+.bitem.poor .cost{color:var(--alarm)}
+.swatch{width:34px;height:34px;border:1px solid #3a3128;position:relative}
+.bitem .nm{font-size:12px;color:var(--bone)}
+.bitem .ds{font-size:10px;color:var(--dust);margin-top:2px}
+.bitem .cost{font-size:12px;color:var(--amber);text-align:right;font-variant-numeric:tabular-nums}
+.bitem .pw{font-size:9px;color:#7b6f5c;text-align:right}
+
+/* ---------- inspector ---------- */
+#inspect{position:fixed;right:10px;top:44px;width:260px;z-index:18;
+  background:#14110dee;border:1px solid var(--edge);display:none;backdrop-filter:blur(3px)}
+#inspect.open{display:block}
+#inspect .ih{padding:8px 10px;border-bottom:1px solid var(--edge);background:#1b1712;
+  display:flex;align-items:center;gap:8px}
+#inspect .ih .t{font-size:12px}
+#inspect .ib{padding:9px 10px}
+.row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;font-size:11px}
+.row .l{color:var(--dust)}
+.row .r{font-variant-numeric:tabular-nums}
+.bar{height:4px;background:#241e17;margin:5px 0 8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--slag);transition:width .25s}
+.bar.hot i{background:var(--amber)}
+.bar.bad i{background:var(--alarm)}
+.recipes{margin-top:8px;border-top:1px solid var(--edge);padding-top:7px}
+.rcp{padding:5px 6px;margin-bottom:3px;border:1px solid #241e17;background:#191510;font-size:10px;cursor:pointer}
+.rcp:hover{border-color:var(--amber)}
+.rcp.on{border-color:var(--amber);background:#221a10;color:var(--amber)}
+.ibtns{display:flex;gap:5px;margin-top:9px}
+.ibtn{flex:1;padding:5px;text-align:center;font-size:10px;border:1px solid var(--edge);background:#191510;color:var(--dust)}
+.ibtn:hover{border-color:var(--rust);color:var(--bone)}
+
+/* ---------- contracts ---------- */
+#contracts{position:fixed;right:10px;bottom:44px;width:240px;z-index:18}
+.ctr{background:#14110de8;border:1px solid var(--edge);border-left:2px solid var(--amber);
+  padding:7px 9px;margin-top:5px;font-size:11px;backdrop-filter:blur(3px)}
+.ctr .cn{display:flex;justify-content:space-between;gap:8px}
+.ctr .cn b{font-weight:600;color:var(--bone)}
+.ctr .cd{color:var(--dust);font-size:10px;margin:2px 0 4px}
+.ctr .cbar{height:3px;background:#241e17}
+.ctr .cbar i{display:block;height:100%;background:var(--amber)}
+.ctr.ok{border-left-color:var(--slag)}
+.ctr.ok .cbar i{background:var(--slag)}
+.ctr.late{border-left-color:var(--alarm)}
+
+/* ---------- log ---------- */
+#log{position:fixed;left:10px;bottom:44px;width:300px;z-index:18;pointer-events:none}
+.lg{padding:5px 9px;margin-top:4px;background:#14110de8;border-left:2px solid var(--dust);
+  font-size:11px;color:var(--bone);animation:lgin .18s ease-out}
+.lg.good{border-left-color:var(--slag)}
+.lg.warn{border-left-color:var(--amber)}
+.lg.bad{border-left-color:var(--alarm)}
+.lg.tech{border-left-color:#7a6bb0}
+@keyframes lgin{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+
+/* ---------- tech tree ---------- */
+#techwrap{display:flex;height:100%;overflow:hidden}
+#techcol{width:200px;border-right:1px solid var(--edge);background:#100e0b;overflow-y:auto;flex:0 0 auto}
+.tbr{padding:9px 11px;border-bottom:1px solid #1e1912;cursor:pointer;border-left:3px solid transparent}
+.tbr:hover{background:#191510}
+.tbr.on{background:#1c1710;border-left-color:var(--amber)}
+.tbr .tn{font-size:11px}
+.tbr .tc{font-size:10px;color:var(--dust);margin-top:2px}
+#techmain{flex:1;overflow-y:auto;padding:12px}
+.tnode{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
+  padding:9px 11px;margin-bottom:6px;border:1px solid #241e17;background:#191510}
+.tnode.done{border-color:#3d4a33;background:#161a12}
+.tnode.avail{border-color:#4a3f28}
+.tnode.avail:hover{border-color:var(--amber)}
+.tnode.lock{opacity:.42}
+.tnode .tt{font-size:12px}
+.tnode .te{font-size:10px;color:var(--dust);margin-top:3px}
+.tnode .tb{padding:5px 11px;border:1px solid var(--edge);font-size:10px;white-space:nowrap;color:var(--amber)}
+.tnode.done .tb{color:var(--slag);border-color:#3d4a33}
+.tnode.lock .tb{color:var(--dust)}
+
+/* ---------- market ---------- */
+#mtabs{display:flex;border-bottom:1px solid var(--edge);background:#181410;flex:0 0 auto}
+.mtab{padding:8px 15px;font-size:11px;color:var(--dust);border-right:1px solid var(--edge)}
+.mtab:hover{color:var(--bone)}
+.mtab.on{color:var(--amber);background:#211a11;box-shadow:inset 0 -2px 0 var(--amber)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{text-align:left;padding:6px 8px;color:var(--dust);font-weight:400;font-size:10px;
+  border-bottom:1px solid var(--edge);position:sticky;top:0;background:#14110d}
+td{padding:6px 8px;border-bottom:1px solid #1c1712;font-variant-numeric:tabular-nums}
+tr:hover td{background:#191510}
+.up{color:var(--slag)}.dn{color:var(--rust)}
+.sat{display:inline-block;width:46px;height:4px;background:#241e17;vertical-align:middle}
+.sat i{display:block;height:100%;background:var(--amber)}
+.ctrcard{border:1px solid var(--edge);padding:10px;margin-bottom:8px;background:#191510}
+.ctrcard.taken{border-color:#3d4a33;background:#161a12}
+.ctrcard h4{font-size:12px;font-weight:600;margin-bottom:3px}
+.ctrcard p{font-size:10px;color:var(--dust);margin-bottom:7px}
+.take{padding:5px 13px;border:1px solid var(--amber);color:var(--amber);font-size:10px}
+.take:hover{background:var(--amber);color:#120e07}
+.take.off{border-color:var(--edge);color:var(--dust)}
+
+/* ---------- map ---------- */
+#mapgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px}
+.site{border:1px solid var(--edge);background:#191510;padding:12px}
+.site.active{border-color:var(--amber)}
+.site h3{font-size:13px;margin-bottom:3px}
+.site .biome{font-size:10px;color:var(--dust);margin-bottom:8px}
+.site .st{font-size:11px;color:var(--dust);padding:1px 0}
+.gobtn{margin-top:9px;width:100%;padding:6px;border:1px solid var(--amber);color:var(--amber);font-size:11px}
+.gobtn:hover{background:var(--amber);color:#120e07}
+.gobtn.off{border-color:var(--edge);color:var(--dust)}
+.route{margin:0 12px 12px;border:1px solid var(--edge);padding:11px;background:#161310}
+.route h4{font-size:11px;margin-bottom:6px;color:var(--amber)}
+select,input[type=text],input[type=number]{background:#100e0b;border:1px solid var(--edge);
+  color:var(--bone);font-family:inherit;font-size:11px;padding:4px 6px;width:100%}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+label{display:block;font-size:10px;color:var(--dust);margin-bottom:3px}
+
+/* ---------- ghost/hint ---------- */
+#hint{position:fixed;left:50%;bottom:46px;transform:translateX(-50%);z-index:19;
+  background:#14110dee;border:1px solid var(--edge);padding:6px 14px;font-size:11px;
+  color:var(--dust);display:none;white-space:nowrap}
+#hint.on{display:block}
+#hint b{color:var(--amber);font-weight:600}
+
+/* ---------- vess / tutorial ---------- */
+#vess{position:fixed;left:50%;top:44px;transform:translateX(-50%);z-index:22;width:min(460px,94vw);
+  background:#191510f5;border:1px solid var(--rust);border-left:3px solid var(--rust);
+  padding:11px 14px;display:none;box-shadow:0 8px 30px rgba(0,0,0,.7)}
+#vess.on{display:block}
+#vess .who{font-size:10px;color:var(--rust);letter-spacing:.1em;margin-bottom:4px}
+#vess .say{font-size:12px;line-height:1.55}
+#vess .task{margin-top:8px;padding-top:7px;border-top:1px solid var(--edge);
+  font-size:11px;color:var(--amber);display:flex;justify-content:space-between;gap:10px}
+#vess .dis{position:absolute;top:6px;right:9px;color:var(--dust);font-size:14px}
+
+/* ---------- title ---------- */
+#title{position:fixed;inset:0;z-index:100;background:radial-gradient(ellipse at 50% 35%,#1d1811,#0a0806 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+#title h1{font-size:clamp(38px,9vw,86px);letter-spacing:.34em;font-weight:400;
+  color:var(--bone);text-indent:.34em;text-shadow:0 0 40px rgba(232,163,39,.22)}
+#title .tag{font-size:11px;letter-spacing:.42em;color:var(--rust);margin-top:10px;text-indent:.42em}
+#title .rule{width:min(430px,80vw);height:1px;background:linear-gradient(90deg,transparent,var(--edge),transparent);margin:26px 0}
+#title .opts{display:flex;flex-direction:column;gap:7px;width:min(280px,78vw)}
+.topt{padding:10px;border:1px solid var(--edge);text-align:center;font-size:12px;letter-spacing:.1em;
+  color:var(--dust);background:#12100cbb;transition:.12s}
+.topt:hover{border-color:var(--amber);color:var(--amber)}
+#title .fine{margin-top:24px;font-size:10px;color:#5b5245;text-align:center;line-height:1.7;max-width:340px}
+
+.hidden{display:none!important}
+@media(max-width:720px){
+  #inspect{width:200px;right:6px}
+  #contracts{width:180px;right:6px}
+  #log{width:200px;left:6px}
+  .tool{font-size:10px;padding:8px 2px}
+  .tool .hk{display:none}
+  #techcol{width:120px}
+  .vit{padding:0 8px}
+  .vit .k{display:none}
+}
+</style>
+</head>
+<body>
+<div id="viewport"></div>
+
+<div id="vitals">
+  <div class="vit" id="vScrip"><span class="k">SCRIP</span><span class="v">&sect;0</span></div>
+  <div class="vit" id="vPower"><span class="k">POWER</span><span class="v">0/0kW</span></div>
+  <div class="vit" id="vData"><span class="k">DATA</span><span class="v">0</span></div>
+  <div class="vit" id="vRate"><span class="k">INCOME</span><span class="v">&sect;0/m</span></div>
+  <div class="vit" id="vBase"><span class="k">BASE</span><span class="v">Kettleford</span></div>
+  <div class="vit" id="vspacer"></div>
+  <div class="vit" id="vtime"><span id="peerdot"></span><span id="clock">day 1</span></div>
+</div>
+
+<div id="inspect">
+  <div class="ih"><span class="t" id="iName">&mdash;</span><span class="px" id="iClose" style="margin-left:auto">&times;</span></div>
+  <div class="ib" id="iBody"></div>
+</div>
+
+<div id="contracts"></div>
+<div id="log"></div>
+<div id="hint"></div>
+
+<div id="vess">
+  <span class="dis" id="vessDis">&times;</span>
+  <div class="who">FOREMAN VESS</div>
+  <div class="say" id="vessSay"></div>
+  <div class="task" id="vessTask"><span></span><span></span></div>
+</div>
+
+<!-- BUILD -->
+<div class="panel" id="pBuild">
+  <div class="ph"><h2>BUILD</h2><span class="sub" id="bSub"></span><span class="px" data-close="pBuild">&times;</span></div>
+  <div id="bcats"></div>
+  <div class="pb" id="blist"></div>
+</div>
+
+<!-- TECH -->
+<div class="panel" id="pTech">
+  <div class="ph"><h2>RESEARCH</h2><span class="sub" id="tSub"></span><span class="px" data-close="pTech">&times;</span></div>
+  <div id="techwrap"><div id="techcol"></div><div id="techmain"></div></div>
+</div>
+
+<!-- MARKET -->
+<div class="panel" id="pMarket">
+  <div class="ph"><h2>KETTLEFORD EXCHANGE</h2><span class="sub" id="mSub"></span><span class="px" data-close="pMarket">&times;</span></div>
+  <div id="mtabs">
+    <button class="mtab on" data-mt="prices">Prices</button>
+    <button class="mtab" data-mt="contracts">Contracts</button>
+    <button class="mtab" data-mt="stock">Stock</button>
+  </div>
+  <div class="pb" id="mbody"></div>
+</div>
+
+<!-- MAP -->
+<div class="panel" id="pMap">
+  <div class="ph"><h2>WORLD</h2><span class="sub" id="wSub"></span><span class="px" data-close="pMap">&times;</span></div>
+  <div class="pb" style="padding:0"><div id="mapgrid"></div><div id="routebox"></div></div>
+</div>
+
+<!-- NET -->
+<div class="panel" id="pNet">
+  <div class="ph"><h2>CO-OP</h2><span class="px" data-close="pNet">&times;</span></div>
+  <div class="pb" id="netbody"></div>
+</div>
+
+<!-- BLUEPRINT -->
+<div class="panel" id="pBlue">
+  <div class="ph"><h2>BLUEPRINTS</h2><span class="px" data-close="pBlue">&times;</span></div>
+  <div class="pb" id="bluebody"></div>
+</div>
+
+<div id="toolbar">
+  <button class="tool" data-tool="build">Build<span class="hk">B</span></button>
+  <button class="tool" data-tool="belt">Belt<span class="hk">V</span></button>
+  <button class="tool" data-tool="lens">Flow Lens<span class="hk">F</span></button>
+  <button class="tool" data-tool="tech">Research<span class="hk">R</span></button>
+  <button class="tool" data-tool="market">Market<span class="hk">M</span></button>
+  <button class="tool" data-tool="map">World<span class="hk">W</span></button>
+  <button class="tool" data-tool="blue">Blueprint<span class="hk">P</span></button>
+  <button class="tool" data-tool="net">Co-op<span class="hk">C</span></button>
+  <button class="tool" data-tool="demolish">Demolish<span class="hk">X</span></button>
+</div>
+
+<div id="title">
+  <h1>BELTLANDS</h1>
+  <div class="tag">BUILD &middot; SUPPLY &middot; CONQUER</div>
+  <div class="rule"></div>
+  <div class="opts">
+    <button class="topt" id="tNew">New works</button>
+    <button class="topt" id="tCont">Continue</button>
+    <button class="topt" id="tJoin">Join a co-op works</button>
+  </div>
+  <div class="fine">Kettleford Basin. Two thousand five hundred scrip, one plot of mud,
+  and an ore outcrop nobody else wanted.</div>
+</div>
+<script>
+"use strict";
+/* ================= BELTLANDS :: DATA ================= */
+
+const GRID = 32;          // tiles per side
+const TILE = 1;           // world units
+const TICK = 1000/10;     // sim tick ms (10hz)
+
+/* ---- ITEMS ---- */
+// base = spot price, dem = daily city demand weight, col = hex
+const ITEMS = {
+  ironstone : {n:"Ironstone",  base:1.60, col:0x8a6a52, dem:2600},
+  copperore : {n:"Copper Ore", base:2.10, col:0xa9613a, dem:1800},
+  coal      : {n:"Coal",       base:1.40, col:0x2c2a28, dem:2400},
+  limestone : {n:"Limestone",  base:1.20, col:0xb8b1a0, dem:1500},
+  coke      : {n:"Coke",       base:3.80, col:0x3a3634, dem:900},
+  lime      : {n:"Lime",       base:3.30, col:0xd8d2c2, dem:900},
+  iron      : {n:"Iron Ingot", base:6.00, col:0x9c9c9c, dem:3200},
+  copper    : {n:"Copper Ingot",base:7.60,col:0xc07444, dem:2200},
+  steel     : {n:"Steel",      base:21.0, col:0x6f7d8c, dem:2600},
+  plate     : {n:"Iron Plate", base:26.0, col:0xa8a8a0, dem:2400},
+  splate    : {n:"Steel Plate",base:56.0, col:0x7d8b9a, dem:1800},
+  gear      : {n:"Gear",       base:13.0, col:0x8e8776, dem:1900},
+  rod       : {n:"Steel Rod",  base:30.0, col:0x8a94a0, dem:1400},
+  wire      : {n:"Copper Wire",base:11.5, col:0xd08a52, dem:2200},
+  frame     : {n:"Machine Frame",base:330.0,col:0x7a8494,dem:900},
+  motor     : {n:"Motor",      base:760.0, col:0x60707e, dem:700},
+};
+const IK = Object.keys(ITEMS);
+
+/* ---- RECIPES ---- */
+// t = seconds per craft at 1x speed
+const RECIPES = {
+  r_iron   : {n:"Iron Ingot",  t:2.0, in:{ironstone:2,coal:1},  out:{iron:1}},
+  r_copper : {n:"Copper Ingot",t:2.0, in:{copperore:2,coal:1},  out:{copper:1}},
+  r_ironC  : {n:"Iron (coke)", t:2.4, in:{ironstone:3,coke:1},  out:{iron:2}},
+  r_copperC: {n:"Copper (coke)",t:2.4,in:{copperore:3,coke:1},  out:{copper:2}},
+  r_steel  : {n:"Steel",       t:3.0, in:{iron:2,coke:1,lime:1},out:{steel:1}},
+  r_coke   : {n:"Coke",        t:2.0, in:{coal:2},              out:{coke:1}},
+  r_lime   : {n:"Lime",        t:2.0, in:{limestone:2},         out:{lime:1}},
+  r_plate  : {n:"Iron Plate",  t:2.2, in:{iron:3},              out:{plate:1}},
+  r_splate : {n:"Steel Plate", t:1.8, in:{steel:2},             out:{splate:1}},
+  r_gear   : {n:"Gear",        t:2.4, in:{iron:2},              out:{gear:1}},
+  r_rod    : {n:"Steel Rod",   t:2.0, in:{steel:2},             out:{rod:3}},
+  r_wire   : {n:"Copper Wire", t:1.6, in:{copper:1},            out:{wire:2}},
+  r_frame  : {n:"Machine Frame",t:5.0,in:{splate:3,rod:2,gear:2},out:{frame:1}},
+  r_motor  : {n:"Motor",       t:7.0, in:{frame:1,wire:6,gear:4},out:{motor:1}},
+  r_data1  : {n:"Basic Data",  t:6.0, in:{gear:2,plate:1},      out:{__data:2}},
+  r_data2  : {n:"Applied Data",t:8.0, in:{frame:1,wire:4},      out:{__data:9}},
+};
+
+/* ---- ORE NODE TYPES ---- */
+const ORES = {ironstone:0x8a6a52, copperore:0xa9613a, coal:0x2c2a28, limestone:0xb8b1a0};
+
+/* ---- BUILDINGS ---- */
+// cat: extract|smelt|make|power|move|store|support
+// w,h footprint. pw = kW draw(+) or supply(-). spd = craft speed mult
+const BLD = {
+  drill:   {n:"Hand Drill", cat:"extract", cost:200, w:2,h:2, pw:0,  spd:0.5, ore:true,
+            d:"6 ore/min. No power needed.", col:0x6b5a44, tech:null},
+  pdrill:  {n:"Powered Drill", cat:"extract", cost:900, w:2,h:2, pw:15, spd:1.5, ore:true,
+            d:"18 ore/min. Needs power.", col:0x7c6a4e, tech:"t_pdrill"},
+  bore:    {n:"Deep Bore", cat:"extract", cost:6500, w:3,h:3, pw:90, spd:5.0, ore:true,
+            d:"60 ore/min. Heavy draw.", col:0x8a7452, tech:"t_bore"},
+  smelter: {n:"Bloom Smelter", cat:"smelt", cost:350, w:2,h:2, pw:0, spd:1,
+            rec:["r_iron","r_copper"], d:"Ore + coal to ingots. Slow, unpowered.", col:0x7a4a34, tech:null},
+  blast:   {n:"Blast Furnace", cat:"smelt", cost:2200, w:3,h:3, pw:25, spd:3,
+            rec:["r_ironC","r_copperC","r_steel"], d:"Fast smelting. Makes steel.", col:0x8c4e2e, tech:"t_blast"},
+  coke:    {n:"Coke Oven", cat:"smelt", cost:800, w:2,h:2, pw:5, spd:1.5,
+            rec:["r_coke"], d:"Coal to coke. Doubles fuel value.", col:0x4a3a30, tech:"t_coke"},
+  kiln:    {n:"Kiln", cat:"smelt", cost:700, w:2,h:2, pw:5, spd:1.5,
+            rec:["r_lime"], d:"Limestone to lime.", col:0x6a5a4a, tech:"t_coke"},
+  press:   {n:"Press", cat:"make", cost:1100, w:2,h:2, pw:18, spd:2,
+            rec:["r_plate","r_splate"], d:"Ingots to plate.", col:0x4a5464, tech:"t_press"},
+  lathe:   {n:"Lathe", cat:"make", cost:1300, w:2,h:2, pw:18, spd:2,
+            rec:["r_gear","r_rod"], d:"Ingots to gears and rod.", col:0x54606e, tech:"t_press"},
+  wiremill:{n:"Wire Mill", cat:"make", cost:1200, w:2,h:2, pw:14, spd:2,
+            rec:["r_wire"], d:"Copper to wire.", col:0x6e5240, tech:"t_wire"},
+  asm:     {n:"Assembler Mk1", cat:"make", cost:2800, w:3,h:3, pw:35, spd:2,
+            rec:["r_frame","r_motor"], d:"Multi-input assembly.", col:0x46566a, tech:"t_asm"},
+  lab:     {n:"Research Lab", cat:"support", cost:5000, w:3,h:3, pw:30, spd:2,
+            rec:["r_data1","r_data2"], d:"Turns goods into research data.", col:0x51486e, tech:"t_lab"},
+  boiler:  {n:"Coal Boiler", cat:"power", cost:400, w:2,h:2, pw:-40, spd:1, fuel:"coal",
+            d:"40kW. Burns coal.", col:0x5c4436, tech:null},
+  turbine: {n:"Steam Turbine", cat:"power", cost:3500, w:3,h:3, pw:-200, spd:1, fuel:"coal",
+            d:"200kW. Burns coal, thirsty.", col:0x6a5040, tech:"t_turbine"},
+  battery: {n:"Capacitor Bank", cat:"power", cost:2000, w:2,h:2, pw:0, spd:1, cap:2400,
+            d:"Buffers the grid against brownout.", col:0x3e4a56, tech:"t_turbine"},
+  crate:   {n:"Crate", cat:"store", cost:100, w:2,h:2, pw:0, spd:1, store:400,
+            d:"Holds 400 units.", col:0x6a5a3e, tech:null},
+  silo:    {n:"Silo", cat:"store", cost:1400, w:3,h:3, pw:0, spd:1, store:5000,
+            d:"Holds 5,000 units.", col:0x74643e, tech:"t_silo"},
+  dock:    {n:"Loading Dock", cat:"store", cost:150, w:3,h:2, pw:0, spd:1,
+            d:"Sells anything belted in, and fills contracts.", col:0x3e5a4a, tech:null},
+  terminal:{n:"Freight Terminal", cat:"move", cost:9000, w:3,h:3, pw:20, spd:1,
+            d:"Ships goods to your other base.", col:0x445a5e, tech:"t_freight"},
+  splitter:{n:"Splitter", cat:"move", cost:60, w:1,h:1, pw:0, spd:1,
+            d:"Splits a belt three ways.", col:0x4e4e46, tech:null},
+  filter:  {n:"Filter Gate", cat:"move", cost:180, w:1,h:1, pw:0, spd:1,
+            d:"Only lets one item type through.", col:0x5e5442, tech:"t_filter"},
+  pole:    {n:"Power Pole", cat:"power", cost:30, w:1,h:1, pw:0, spd:1, poleR:7,
+            d:"Extends the power grid 7 tiles.", col:0x4a4034, tech:null},
+};
+const BCATS = [["extract","Extract"],["smelt","Smelt"],["make","Make"],
+               ["power","Power"],["move","Move"],["store","Store"],["support","Support"]];
+
+/* ---- BELTS ---- */
+const BELTS = [
+  {n:"Belt Mk1", cost:8,  rate:15,  col:0x555049, tech:null},
+  {n:"Belt Mk2", cost:26, rate:45,  col:0x6b6152, tech:"t_belt2"},
+  {n:"Belt Mk3", cost:72, rate:120, col:0x8a7550, tech:"t_belt3"},
+];
+
+/* ---- TECH TREE ---- */
+const BRANCH = {
+  A:{n:"Metallurgy", col:"#b4502a"},
+  B:{n:"Power",      col:"#e8a327"},
+  C:{n:"Automation", col:"#5e7ea8"},
+};
+const TECH = {
+  t_coke:   {b:"A", n:"Coking & Calcining", cost:12,  req:[], e:"Coke Oven, Kiln"},
+  t_blast:  {b:"A", n:"Blast Furnace",      cost:40,  req:["t_coke"], e:"Blast Furnace, steel"},
+  t_press:  {b:"A", n:"Forming",            cost:22,  req:[], e:"Press, Lathe"},
+  t_wire:   {b:"A", n:"Drawing",            cost:30,  req:["t_press"], e:"Wire Mill"},
+  t_alloy:  {b:"A", n:"Alloy Practice",     cost:90,  req:["t_blast"], e:"+25% smelting speed"},
+  t_hard:   {b:"A", n:"Hardened Tooling",   cost:150, req:["t_alloy","t_press"], e:"+25% forming speed"},
+  t_bore:   {b:"A", n:"Deep Boring",        cost:220, req:["t_hard"], e:"Deep Bore"},
+
+  t_boiler2:{b:"B", n:"Firebox Efficiency", cost:15,  req:[], e:"Boilers +50% output"},
+  t_turbine:{b:"B", n:"Steam Turbines",     cost:55,  req:["t_boiler2"], e:"Turbine, Capacitor Bank"},
+  t_grid:   {b:"B", n:"Grid Management",    cost:80,  req:["t_turbine"], e:"Poles reach +4 tiles"},
+  t_burn:   {b:"B", n:"Clean Burn",         cost:130, req:["t_grid"], e:"Fuel lasts 60% longer"},
+  t_ind:    {b:"B", n:"Industrial Drive",   cost:200, req:["t_burn"], e:"All machines -20% draw"},
+
+  t_pdrill: {b:"C", n:"Powered Extraction", cost:10,  req:[], e:"Powered Drill"},
+  t_belt2:  {b:"C", n:"Belt Mk2",           cost:20,  req:[], e:"45/min belts"},
+  t_lab:    {b:"C", n:"Laboratory Method",  cost:18,  req:[], e:"Research Lab"},
+  t_silo:   {b:"C", n:"Bulk Storage",       cost:35,  req:["t_belt2"], e:"Silo"},
+  t_filter: {b:"C", n:"Sorting Logic",      cost:45,  req:["t_belt2"], e:"Filter Gate"},
+  t_asm:    {b:"C", n:"Assembly Line",      cost:70,  req:["t_filter"], e:"Assembler Mk1"},
+  t_belt3:  {b:"C", n:"Belt Mk3",           cost:110, req:["t_filter"], e:"120/min belts"},
+  t_freight:{b:"C", n:"Freight Logistics",  cost:170, req:["t_asm"], e:"Terminal, second base"},
+  t_deed:   {b:"C", n:"Land Deed",          cost:260, req:["t_freight"], e:"Claim a second site"},
+};
+
+/* ---- SITES ---- */
+const SITES = {
+  kettleford:{n:"Kettleford Works", biome:"Temperate basin", home:true,
+    d:"Flat, well served by road, close to the exchange. Ore is thin here.",
+    ores:{ironstone:3,coal:2,limestone:2,copperore:1}, grade:1.0, cost:0},
+  ridgeback:{n:"Ridgeback Outpost", biome:"Highland ore field",
+    d:"Prime seams and brutal ground. Everything must be shipped out.",
+    ores:{ironstone:6,coal:5,copperore:4,limestone:1}, grade:1.6, cost:25000},
+};
+</script>
+<script>
+"use strict";
+/* ================= BELTLANDS :: STATE + SIM ================= */
+
+const G = {
+  scrip:2500, data:0, day:1, t:0, started:false,
+  site:"kettleford",
+  bases:{},            // siteKey -> {machines:[], belts:[], ores:[], grid:{}}
+  tech:{},             // techId -> true
+  market:{},           // item -> {sat, price}
+  contracts:[],
+  incomeHist:[], income:0, incomeAcc:0,
+  unlockedSites:{kettleford:true},
+  freight:{from:null,to:null,item:null,rate:0,buf:0},
+  blueprints:[],
+  sel:null, tool:null, buildPick:null, beltTier:0, lens:false,
+  vess:0, seen:{},
+  peer:null, conn:[], host:false, name:"Operator",
+};
+
+function base(k){ return G.bases[k||G.site]; }
+function newBase(key){
+  const S=SITES[key], b={machines:[], belts:[], ores:[], next:1};
+  // scatter ore nodes deterministically-ish
+  let seed = key.length*7919;
+  const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff;};
+  for(const [ore,count] of Object.entries(S.ores)){
+    for(let i=0;i<count;i++){
+      let x,y,tries=0;
+      do{ x=3+Math.floor(rnd()*(GRID-8)); y=3+Math.floor(rnd()*(GRID-8)); tries++; }
+      while(tries<50 && b.ores.some(o=>Math.abs(o.x-x)<4&&Math.abs(o.y-y)<4));
+      const gr = 0.7+rnd()*0.6;
+      b.ores.push({x,y,ore, grade:+(gr*S.grade).toFixed(2), id:b.next++});
+    }
+  }
+  return b;
+}
+
+/* ---------- MARKET ---------- */
+function initMarket(){
+  for(const k of IK) G.market[k]={sat:0, price:ITEMS[k].base, sold:0};
+}
+function priceOf(k){
+  const m=G.market[k];
+  return Math.max(ITEMS[k].base*0.22, ITEMS[k].base*(1 - m.sat*0.78));
+}
+function sell(k,qty){
+  const m=G.market[k]; let earned=0;
+  // sell unit-by-unit in chunks so saturation bites within a big dump
+  let left=qty;
+  while(left>0){
+    const chunk=Math.min(left,5);
+    earned += priceOf(k)*chunk;
+    m.sat = Math.min(0.97, m.sat + chunk/ITEMS[k].dem);
+    left-=chunk;
+  }
+  m.sold+=qty;
+  G.scrip+=earned; G.incomeAcc+=earned;
+  return earned;
+}
+function marketRecover(dt){
+  // proportional decay: a saturated market recovers meaningfully but never instantly,
+  // so dumping still costs you for a long while.
+  for(const k of IK){ const m=G.market[k];
+    m.sat = Math.max(0, m.sat - m.sat*dt*0.0055 - dt*0.00012); }
+}
+
+/* ---------- MACHINE MODEL ---------- */
+function mk(type,x,y,rot){
+  const D=BLD[type];
+  const m={id:base().next++, type, x, y, rot:rot||0, w:D.w, h:D.h,
+    inv:{}, out:{}, prog:0, recipe:(D.rec?D.rec[0]:null), ore:null, active:false,
+    fuel:0, powered:false, eff:1};
+  if(D.ore){ const o=oreAt(x,y,D.w,D.h); m.ore=o?o.ore:null; m.grade=o?o.grade:1; }
+  return m;
+}
+function oreAt(x,y,w,h){
+  if(!base()) return null;
+  for(const o of base().ores)
+    if(o.x>=x-1&&o.x<x+w+1&&o.y>=y-1&&o.y<y+h+1) return o;
+  return null;
+}
+function footFree(x,y,w,h,ignore){
+  if(x<0||y<0||x+w>GRID||y+h>GRID) return false;
+  if(!base()) return false;
+  for(const m of base().machines){
+    if(m===ignore) continue;
+    if(x<m.x+m.w&&x+w>m.x&&y<m.y+m.h&&y+h>m.y) return false;
+  }
+  for(const b of base().belts){
+    if(b.x>=x&&b.x<x+w&&b.y>=y&&b.y<y+h) return false;
+  }
+  return true;
+}
+function machAt(x,y){
+  if(!base()) return null;
+  for(const m of base().machines)
+    if(x>=m.x&&x<m.x+m.w&&y>=m.y&&y<m.y+m.h) return m;
+  return null;
+}
+function beltAt(x,y){ return base()?(base().belts.find(b=>b.x===x&&b.y===y)||null):null; }
+
+function invCount(inv){ let s=0; for(const k in inv) s+=inv[k]; return s; }
+function cap(m){ const D=BLD[m.type]; return D.store||(D.rec?60:40); }
+
+/* ---------- POWER ---------- */
+function powered(m){
+  if(BLD[m.type].pw<=0) return true;
+  return m.powered;
+}
+function rebuildPower(){
+  const b=base();
+  if(!b) return;
+  // sources & poles form a network by radius connectivity
+  const nodes=[];
+  for(const m of b.machines){
+    const D=BLD[m.type];
+    if(D.pw<0 || D.poleR || D.cap) nodes.push(m);
+  }
+  // union-find on radius
+  const par=nodes.map((_,i)=>i);
+  const find=a=>{while(par[a]!==a){par[a]=par[par[a]];a=par[a];}return a;};
+  const uni=(a,b)=>{a=find(a);b=find(b);if(a!==b)par[a]=b;};
+  const R=(BLD.pole.poleR + (G.tech.t_grid?4:0));
+  for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+    const a=nodes[i],c=nodes[j];
+    const d=Math.hypot((a.x+a.w/2)-(c.x+c.w/2),(a.y+a.h/2)-(c.y+c.h/2));
+    if(d<=R+2) uni(i,j);
+  }
+  // group id per node
+  const groups={};
+  nodes.forEach((m,i)=>{ const r=find(i); (groups[r]=groups[r]||[]).push(m); m._g=r; });
+  b._grids={};
+  for(const r in groups){
+    b._grids[r]={supply:0, demand:0, buf:0, bufMax:0, members:groups[r], ratio:1};
+  }
+  // consumers attach to nearest grid within R
+  for(const m of b.machines){
+    const D=BLD[m.type];
+    m._grid=null;
+    if(D.pw<=0) continue;
+    let best=null,bd=1e9;
+    for(const n of nodes){
+      const d=Math.hypot((m.x+m.w/2)-(n.x+n.w/2),(m.y+m.h/2)-(n.y+n.h/2));
+      if(d<=R+1 && d<bd){bd=d;best=n;}
+    }
+    if(best) m._grid=best._g;
+  }
+}
+function tickPower(dt){
+  const b=base();
+  if(!b) return;
+  if(!b._grids) rebuildPower();
+  const drawMul = G.tech.t_ind?0.8:1;
+  for(const r in b._grids){ const g=b._grids[r]; g.supply=0; g.demand=0; g.bufMax=0; }
+  // supply from fuel burners
+  for(const m of b.machines){
+    const D=BLD[m.type]; if(D.pw>=0 && !D.cap) continue;
+    const g=b._grids[m._g]; if(!g) continue;
+    if(D.cap){ g.bufMax+=D.cap; continue; }
+    // burner
+    if(m.fuel<=0){
+      const have=m.inv[D.fuel]||0;
+      if(have>0){ m.inv[D.fuel]=have-1; m.fuel=(D.fuel==="coal"?9:9)*(G.tech.t_burn?1.6:1); }
+    }
+    if(m.fuel>0){
+      m.fuel-=dt; m.active=true;
+      let out=-D.pw*(G.tech.t_boiler2 && m.type==="boiler"?1.5:1);
+      g.supply+=out;
+    } else m.active=false;
+  }
+  // demand
+  for(const m of b.machines){
+    const D=BLD[m.type]; if(D.pw<=0) continue;
+    if(m._grid==null){ m.powered=false; m.eff=0; continue; }
+    const g=b._grids[m._grid]; if(!g){m.powered=false;m.eff=0;continue;}
+    if(wantsWork(m)) g.demand+=D.pw*drawMul;
+  }
+  for(const r in b._grids){
+    const g=b._grids[r];
+    g.buf=Math.min(g.bufMax, (g.buf||0));
+    let ratio = g.demand<=0?1:Math.min(1,g.supply/g.demand);
+    if(ratio<1 && g.buf>0){
+      const need=(g.demand-g.supply)*dt;
+      const take=Math.min(g.buf,need);
+      g.buf-=take; ratio=Math.min(1,(g.supply+take/dt)/g.demand);
+    } else if(ratio>=1 && g.bufMax>0){
+      g.buf=Math.min(g.bufMax, g.buf+(g.supply-g.demand)*dt*0.5);
+    }
+    g.ratio=ratio;
+  }
+  for(const m of b.machines){
+    const D=BLD[m.type];
+    if(D.pw<=0){ m.powered=true; m.eff=1; m.pwWhy=null; continue; }
+    const g=b._grids[m._grid];
+    if(!g){ m.eff=0; m.powered=false; m.pwWhy="not connected to a grid"; continue; }
+    m.eff = g.ratio;
+    m.powered = m.eff>0.02;
+    m.pwWhy = g.supply<=0 ? "grid has no generator running"
+            : m.eff<0.99 ? "grid is overdrawn" : null;
+  }
+}
+function gridTotals(){
+  const b=base(); let s=0,d=0;
+  if(!b._grids) return [0,0];
+  for(const r in b._grids){ s+=b._grids[r].supply; d+=b._grids[r].demand; }
+  return [d,s];
+}
+
+/* ---------- WORK ---------- */
+function wantsWork(m){
+  const D=BLD[m.type];
+  if(D.ore) return invCount(m.out)<cap(m);
+  if(!D.rec) return false;
+  const R=RECIPES[m.recipe]; if(!R) return false;
+  for(const k in R.in) if((m.inv[k]||0)<R.in[k]) return false;
+  if(R.out.__data) return true;
+  return invCount(m.out)<cap(m);
+}
+function speedMul(m){
+  const D=BLD[m.type];
+  let s=D.spd;
+  if(D.cat==="smelt"&&G.tech.t_alloy) s*=1.25;
+  if(D.cat==="make"&&G.tech.t_hard) s*=1.25;
+  return s;
+}
+function tickMachines(dt){
+  const b=base();
+  if(!b) return;
+  for(const m of b.machines){
+    const D=BLD[m.type];
+    if(D.pw<0||D.cap||D.poleR) continue;
+    if(m.type==="dock"){ tickDock(m); continue; }
+    if(m.type==="terminal"){ tickTerminal(m,dt); continue; }
+    if(D.store||m.type==="splitter"||m.type==="filter"){ m.active=invCount(m.inv)>0; continue; }
+
+    if(!wantsWork(m)){ m.active=false; m.prog=0; continue; }
+    const eff = D.pw>0 ? m.eff : 1;
+    if(eff<=0.02){ m.active=false; continue; }
+    m.active=true;
+
+    if(D.ore){
+      m.prog += dt*speedMul(m)*eff*(m.grade||1)*2;
+      while(m.prog>=1){ m.prog-=1; if(m.ore){ m.out[m.ore]=(m.out[m.ore]||0)+1; } }
+      continue;
+    }
+    const R=RECIPES[m.recipe];
+    m.prog += dt*eff*speedMul(m)/R.t;
+    if(m.prog>=1){
+      m.prog=0;
+      for(const k in R.in) m.inv[k]-=R.in[k];
+      for(const k in R.out){
+        if(k==="__data") G.data+=R.out[k];
+        else m.out[k]=(m.out[k]||0)+R.out[k];
+      }
+    }
+  }
+}
+function tickDock(m){
+  m.active=false;
+  for(const k in m.inv){
+    let q=m.inv[k]; if(q<=0) continue;
+    m.active=true;
+    // contracts first
+    for(const c of G.contracts){
+      if(c.done||c.item!==k) continue;
+      const take=Math.min(q,c.need-c.have);
+      if(take>0){ c.have+=take; q-=take; G.scrip+=take*c.rate; G.incomeAcc+=take*c.rate;
+        if(c.have>=c.need){ c.done=true; G.scrip+=c.bonus; G.data+=c.data;
+          logMsg(`Contract filled: ${c.title}. +§${fmt(c.bonus)} bonus, +${c.data} data`,"good");
+          sfx("chime"); } }
+    }
+    if(q>0) sell(k,q);
+    m.inv[k]=0;
+  }
+}
+function tickTerminal(m,dt){
+  const F=G.freight;
+  m.active=false;
+  if(F.from!==G.site||!F.item) { return; }
+  const have=m.inv[F.item]||0;
+  if(have>0){ m.active=true;
+    const send=Math.min(have, F.rate*dt/60*10);
+    m.inv[F.item]=have-send; F.buf+=send;
+  }
+}
+
+/* ---------- BELTS ---------- */
+// belt: {x,y,dir(0-3),tier,items:[{k,p}]}
+const DIRV=[[0,-1],[1,0],[0,1],[-1,0]];
+const SPACING = 0.24;   // minimum gap between items on a belt tile
+function beltSpeed(t){ return BELTS[t].rate/60; } // items per sec through one tile
+function tickBelts(dt){
+  const b=base();
+  if(!b) return;
+  // move items along; belts pass to next belt or into machine
+  for(const bl of b.belts){
+    const spd=beltSpeed(bl.tier)*dt*0.9;
+    const [dx,dy]=DIRV[bl.dir];
+    const nx=bl.x+dx, ny=bl.y+dy;
+    const nb=beltAt(nx,ny);
+    const nm=machAt(nx,ny);
+    // items[0] is the most advanced (front of the belt); new items append at the tail
+    for(let i=0;i<bl.items.length;i++){
+      const it=bl.items[i];
+      const ahead = bl.items[i-1];
+      const maxP = ahead ? ahead.p-SPACING : 1.0;
+      it.p = Math.max(0, Math.min(1.0, Math.min(it.p+spd, maxP)));
+    }
+    // deliver the front item
+    while(bl.items.length){
+      const it=bl.items[0];
+      if(it.p < 0.999) break;
+      let moved=false;
+      if(nb){
+        const tail=nb.items[nb.items.length-1];
+        if(!tail || tail.p>SPACING){ nb.items.push({k:it.k,p:0}); moved=true; }
+      } else if(nm){
+        if(acceptInto(nm,it.k)) moved=true;
+      }
+      if(!moved) break;
+      bl.items.shift();
+    }
+    // pull from a machine sitting directly behind this belt
+    const px=bl.x-dx, py=bl.y-dy;
+    const pm=machAt(px,py);
+    if(pm && !beltAt(px,py)){
+      const tail=bl.items[bl.items.length-1];
+      if(!tail || tail.p>SPACING){
+        const k=pullFrom(pm, bl);
+        if(k) bl.items.push({k,p:0});
+      }
+    }
+  }
+}
+function acceptInto(m,k){
+  const D=BLD[m.type];
+  if(m.type==="dock"){ m.inv[k]=(m.inv[k]||0)+1; return true; }
+  if(m.type==="filter"){
+    if(m.filterItem && m.filterItem!==k) return false;
+    if(invCount(m.inv)>=8) return false;
+    m.inv[k]=(m.inv[k]||0)+1; return true;
+  }
+  if(m.type==="splitter"){ if(invCount(m.inv)>=6) return false; m.inv[k]=(m.inv[k]||0)+1; return true; }
+  if(D.store){ if(invCount(m.inv)>=D.store) return false; m.inv[k]=(m.inv[k]||0)+1; return true; }
+  if(m.type==="terminal"){ if(invCount(m.inv)>=2000) return false; m.inv[k]=(m.inv[k]||0)+1; return true; }
+  if(D.pw<0&&D.fuel){ if(k!==D.fuel) return false; if((m.inv[k]||0)>=100) return false;
+    m.inv[k]=(m.inv[k]||0)+1; return true; }
+  if(D.rec){
+    const R=RECIPES[m.recipe]; if(!R||!R.in[k]) return false;
+    if((m.inv[k]||0) >= R.in[k]*12) return false;
+    m.inv[k]=(m.inv[k]||0)+1; return true;
+  }
+  return false;
+}
+function pullFrom(m,bl){
+  const D=BLD[m.type];
+  const src = (D.store||m.type==="splitter"||m.type==="filter"||m.type==="terminal") ? m.inv : m.out;
+  const keys=Object.keys(src).filter(k=>src[k]>0);
+  if(!keys.length) return null;
+  m._rr=((m._rr||0)+1)%keys.length;
+  const k=keys[m._rr];
+  src[k]--; if(src[k]<=0) delete src[k];
+  return k;
+}
+
+/* ---------- CONTRACTS ---------- */
+const CITYNAMES=["Kettleford","Hollow Row","Ashgate Depot","Millstone"];
+function genContract(){
+  const pool=IK.filter(k=>{
+    if(["ironstone","copperore","coal","limestone"].includes(k)) return true;
+    if(k==="iron"||k==="copper") return true;
+    if(G.tech.t_press&&["plate","gear"].includes(k)) return true;
+    if(G.tech.t_blast&&["steel","splate","rod"].includes(k)) return true;
+    if(G.tech.t_wire&&k==="wire") return true;
+    if(G.tech.t_asm&&["frame","motor"].includes(k)) return true;
+    return false;
+  });
+  const k=pool[Math.floor(Math.random()*pool.length)];
+  const tier=1+Math.floor(Math.random()*3);
+  const need=Math.round((160/Math.pow(ITEMS[k].base,0.55))*tier*(0.8+Math.random()*0.5));
+  const rate=+(ITEMS[k].base*(1.35+Math.random()*0.35)).toFixed(2);
+  const bonus=Math.round(need*rate*0.42);
+  return {id:Math.random().toString(36).slice(2,8), item:k, need, have:0, rate, bonus,
+    data:Math.round(3+tier*4+ITEMS[k].base*0.4),
+    city:CITYNAMES[Math.floor(Math.random()*CITYNAMES.length)],
+    title:`${need} ${ITEMS[k].n}`, taken:false, done:false, exp:G.t+600+tier*180};
+}
+let offerPool=[];
+function refreshOffers(force){
+  offerPool=offerPool.filter(c=>c.exp>G.t);
+  while(offerPool.length<4) offerPool.push(genContract());
+}
+
+/* ---------- TICK ---------- */
+let acc=0, last=performance.now();
+function simStep(dt){
+  G.t+=dt;
+  if(!base()){ marketRecover(dt); return; }
+  tickPower(dt);
+  tickMachines(dt);
+  tickBelts(dt);
+  marketRecover(dt);
+  // freight delivery
+  const F=G.freight;
+  if(F.buf>0&&F.to&&G.bases[F.to]){
+    const tgt=G.bases[F.to].machines.find(m=>m.type==="terminal");
+    if(tgt){ const q=Math.floor(F.buf); if(q>0){ tgt.out[F.item]=(tgt.out[F.item]||0)+q; F.buf-=q; } }
+  }
+  // income smoothing
+  G.income=G.income*0.96 + (G.incomeAcc/dt)*0.04*60;
+  G.incomeAcc=0;
+  if(G.t%20<dt) refreshOffers();
+  const nd=1+Math.floor(G.t/1200);   // a day is 20 real minutes
+  if(nd!==G.day){ G.day=nd; onNewDay(); }
+}
+function onNewDay(){
+  // upkeep
+  let up=0;
+  for(const k in G.bases) for(const m of G.bases[k].machines) up+=(BLD[m.type]?BLD[m.type].cost:0)*0.012;
+  up=Math.round(up);
+  if(up>0){ G.scrip-=up; logMsg(`Day ${G.day}. Maintenance −§${fmt(up)}`, G.scrip<0?"bad":""); }
+  refreshOffers(true);
+}
+</script>
+<script>
+"use strict";
+/* ================= BELTLANDS :: RENDER + AUDIO ================= */
+
+let scene, cam, renderer, raycaster, groundPlane, groundMesh;
+let root, meshMap = new Map(), beltMap = new Map(), oreMap = new Map();
+let ghost=null, ghostBad=false, itemPool=[], itemUsed=0, itemGroup;
+let camTarget=new THREE.Vector3(GRID/2,0,GRID/2), camDist=30, camAz=Math.PI*0.25, camEl=0.92;
+
+function initGL(){
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0d0b09);
+  scene.fog=new THREE.Fog(0x0d0b09, 42, 96);
+
+  cam=new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 400);
+  renderer=new THREE.WebGLRenderer({antialias:true, powerPreference:"high-performance"});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  document.getElementById("viewport").appendChild(renderer.domElement);
+
+  const hemi=new THREE.HemisphereLight(0x6a7a90, 0x241c14, 0.55); scene.add(hemi);
+  const sun=new THREE.DirectionalLight(0xffd9a0, 1.15);
+  sun.position.set(24,40,14); sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048);
+  const s=28; sun.shadow.camera.left=-s;sun.shadow.camera.right=s;
+  sun.shadow.camera.top=s;sun.shadow.camera.bottom=-s;
+  sun.shadow.camera.far=110; sun.shadow.bias=-0.0008;
+  scene.add(sun); scene.add(sun.target); sun.target.position.set(GRID/2,0,GRID/2);
+  const fill=new THREE.DirectionalLight(0xe8a327,0.25); fill.position.set(-20,14,-16); scene.add(fill);
+
+  root=new THREE.Group(); scene.add(root);
+  itemGroup=new THREE.Group(); scene.add(itemGroup);
+
+  // ground
+  const gm=new THREE.Mesh(new THREE.BoxGeometry(GRID,0.6,GRID),
+    new THREE.MeshLambertMaterial({color:0x2a231b}));
+  gm.position.set(GRID/2,-0.3,GRID/2); gm.receiveShadow=true; scene.add(gm); groundMesh=gm;
+
+  // grid lines
+  const gh=new THREE.GridHelper(GRID,GRID,0x3a3226,0x231d16);
+  gh.position.set(GRID/2,0.01,GRID/2); scene.add(gh);
+
+  // border
+  const bg=new THREE.EdgesGeometry(new THREE.BoxGeometry(GRID,0.62,GRID));
+  const bl=new THREE.LineSegments(bg,new THREE.LineBasicMaterial({color:0x5a4a34}));
+  bl.position.set(GRID/2,-0.3,GRID/2); scene.add(bl);
+
+  raycaster=new THREE.Raycaster();
+  groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
+
+  // item instancing pool
+  const ig=new THREE.BoxGeometry(0.26,0.16,0.26);
+  for(let i=0;i<1400;i++){
+    const m=new THREE.Mesh(ig,new THREE.MeshLambertMaterial({color:0xffffff}));
+    m.visible=false; itemGroup.add(m); itemPool.push(m);
+  }
+  addEventListener("resize",()=>{
+    cam.aspect=innerWidth/innerHeight; cam.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
+}
+
+function updCam(){
+  const x=camTarget.x+Math.cos(camAz)*Math.cos(camEl)*camDist;
+  const y=camTarget.y+Math.sin(camEl)*camDist;
+  const z=camTarget.z+Math.sin(camAz)*Math.cos(camEl)*camDist;
+  cam.position.set(x,y,z); cam.lookAt(camTarget);
+}
+
+/* ---------- MESH BUILD ---------- */
+function matFor(col,emis){
+  return new THREE.MeshLambertMaterial({color:col, emissive:emis||0x000000});
+}
+function buildMachineMesh(m){
+  const D=BLD[m.type];
+  const g=new THREE.Group();
+  const W=m.w*0.9, H=m.h*0.9;
+  const base_=new THREE.Mesh(new THREE.BoxGeometry(W,0.22,H), matFor(0x2f2820));
+  base_.position.y=0.11; base_.castShadow=true; base_.receiveShadow=true; g.add(base_);
+
+  const bodyH = D.cat==="power"?1.15: D.cat==="store"?0.9: D.ore?0.75:0.85;
+  const body=new THREE.Mesh(new THREE.BoxGeometry(W*0.86,bodyH,H*0.86), matFor(D.col));
+  body.position.y=0.22+bodyH/2; body.castShadow=true; body.receiveShadow=true;
+  g.add(body); g.userData.body=body;
+
+  // detailing by category
+  if(D.ore){
+    const tow=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.13,1.5,6), matFor(0x4a4238));
+    tow.position.set(0,0.22+bodyH+0.6,0); tow.castShadow=true; g.add(tow);
+    const hd=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.16,0.5), matFor(0x6a5a44));
+    hd.position.set(0,0.22+bodyH+1.35,0); g.add(hd);
+    const bit=new THREE.Mesh(new THREE.ConeGeometry(0.14,0.5,6), matFor(0x8a7a5a));
+    bit.rotation.x=Math.PI; bit.position.set(0,0.14,0); g.add(bit); g.userData.spin=bit;
+  }
+  if(D.cat==="smelt"||D.cat==="power"){
+    const st=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,1.1,8), matFor(0x35302a));
+    st.position.set(W*0.28,0.22+bodyH+0.55,-H*0.28); st.castShadow=true; g.add(st);
+    g.userData.stack=st;
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(W*0.5,0.3,0.06),
+      new THREE.MeshBasicMaterial({color:0xff7a22}));
+    glow.position.set(0,0.5,H*0.44); g.add(glow); g.userData.glow=glow; glow.visible=false;
+  }
+  if(D.cat==="make"||D.cat==="support"){
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(W*0.5,0.1,0.12), matFor(0x8a8272));
+    arm.position.set(0,0.22+bodyH+0.14,0); g.add(arm); g.userData.arm=arm;
+    const pil=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.3,6), matFor(0x5a5248));
+    pil.position.set(0,0.22+bodyH+0.02,0); g.add(pil);
+  }
+  if(D.store){
+    const rim=new THREE.Mesh(new THREE.BoxGeometry(W*0.9,0.06,H*0.9), matFor(0x8a7550));
+    rim.position.y=0.22+bodyH; g.add(rim);
+  }
+  if(m.type==="dock"){
+    const sign=new THREE.Mesh(new THREE.BoxGeometry(W*0.7,0.34,0.05),
+      new THREE.MeshBasicMaterial({color:0x4fbf78}));
+    sign.position.set(0,0.22+bodyH+0.24,0); g.add(sign);
+  }
+  if(D.poleR){
+    const p=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,1.5,5), matFor(0x4a4034));
+    p.position.y=0.75; p.castShadow=true; g.add(p);
+    const x=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.05,0.05), matFor(0x5a5044));
+    x.position.y=1.4; g.add(x);
+    body.visible=false; base_.visible=false;
+  }
+  if(m.type==="splitter"||m.type==="filter"){
+    body.scale.y=0.45; body.position.y=0.22+bodyH*0.225;
+  }
+
+  // status lamp
+  const lamp=new THREE.Mesh(new THREE.SphereGeometry(0.07,6,6),
+    new THREE.MeshBasicMaterial({color:0x333333}));
+  lamp.position.set(-W*0.36,0.22+bodyH+0.12,-H*0.36); g.add(lamp); g.userData.lamp=lamp;
+
+  g.position.set(m.x+m.w/2, 0, m.y+m.h/2);
+  g.rotation.y = -(m.rot||0)*Math.PI/2;
+  return g;
+}
+function buildBeltMesh(b){
+  const g=new THREE.Group();
+  const B=BELTS[b.tier];
+  const bed=new THREE.Mesh(new THREE.BoxGeometry(0.82,0.1,0.94), matFor(B.col));
+  bed.position.y=0.1; bed.receiveShadow=true; g.add(bed);
+  const r1=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.94), matFor(0x3a332a));
+  r1.position.set(-0.42,0.13,0); g.add(r1);
+  const r2=r1.clone(); r2.position.x=0.42; g.add(r2);
+  const arw=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.2,3),
+    new THREE.MeshBasicMaterial({color:B.col===0x555049?0x7a7268:0xc09a5a}));
+  arw.rotation.x=-Math.PI/2; arw.position.set(0,0.17,0.18); g.add(arw);
+  g.position.set(b.x+0.5,0,b.y+0.5);
+  g.rotation.y=-b.dir*Math.PI/2;
+  return g;
+}
+function buildOreMesh(o){
+  const g=new THREE.Group();
+  const c=ORES[o.ore];
+  for(let i=0;i<5;i++){
+    const s=0.28+Math.random()*0.34;
+    const r=new THREE.Mesh(new THREE.DodecahedronGeometry(s,0), matFor(c));
+    r.position.set((Math.random()-0.5)*1.9, s*0.42, (Math.random()-0.5)*1.9);
+    r.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
+    r.castShadow=true; r.receiveShadow=true; g.add(r);
+  }
+  g.position.set(o.x+0.5,0,o.y+0.5);
+  return g;
+}
+
+function syncScene(){
+  const b=base();
+  if(!b) return;
+  const live=new Set();
+  for(const m of b.machines){
+    live.add("m"+m.id);
+    if(!meshMap.has("m"+m.id)){
+      const g=buildMachineMesh(m); root.add(g); meshMap.set("m"+m.id,{g,m});
+    }
+  }
+  for(const bl of b.belts){
+    const key="b"+bl.x+"_"+bl.y; live.add(key);
+    const ex=beltMap.get(key);
+    if(!ex||ex.tier!==bl.tier||ex.dir!==bl.dir){
+      if(ex){root.remove(ex.g);}
+      const g=buildBeltMesh(bl); root.add(g); beltMap.set(key,{g,bl,tier:bl.tier,dir:bl.dir});
+    }
+  }
+  for(const o of b.ores){
+    const key="o"+o.id; live.add(key);
+    if(!oreMap.has(key)){ const g=buildOreMesh(o); root.add(g); oreMap.set(key,{g,o}); }
+  }
+  for(const [k,v] of meshMap) if(!live.has(k)){ root.remove(v.g); meshMap.delete(k); }
+  for(const [k,v] of beltMap) if(!live.has(k)){ root.remove(v.g); beltMap.delete(k); }
+  for(const [k,v] of oreMap)  if(!live.has(k)){ root.remove(v.g); oreMap.delete(k); }
+}
+function clearScene(){
+  for(const [k,v] of meshMap) root.remove(v.g); meshMap.clear();
+  for(const [k,v] of beltMap) root.remove(v.g); beltMap.clear();
+  for(const [k,v] of oreMap) root.remove(v.g); oreMap.clear();
+}
+
+/* ---------- ANIMATE ---------- */
+let smokeParts=[];
+function initSmoke(){
+  const g=new THREE.SphereGeometry(0.2,5,5);
+  for(let i=0;i<90;i++){
+    const p=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x6a625a,transparent:true,opacity:0}));
+    p.visible=false; scene.add(p); smokeParts.push({m:p,life:0,x:0,y:0,z:0});
+  }
+}
+function emitSmoke(x,y,z){
+  for(const s of smokeParts){ if(s.life<=0){
+    s.life=1; s.x=x+(Math.random()-0.5)*0.2; s.y=y; s.z=z+(Math.random()-0.5)*0.2;
+    s.m.visible=true; s.vy=0.5+Math.random()*0.4; return; } }
+}
+let smokeT=0;
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.1,(now-last)/1000); last=now;
+  if(G.started){
+    acc+=dt;
+    while(acc>=TICK/1000){ simStep(TICK/1000); acc-=TICK/1000; }
+  }
+  // machine anim
+  for(const [k,v] of meshMap){
+    const m=v.m, g=v.g, D=BLD[m.type];
+    const on=m.active&&(D.pw<=0||m.eff>0.02);
+    if(g.userData.spin&&on) g.userData.spin.rotation.y+=dt*9*(m.eff||1);
+    if(g.userData.arm&&on) g.userData.arm.rotation.y+=dt*4*(m.eff||1);
+    if(g.userData.glow) g.userData.glow.visible=on;
+    if(g.userData.lamp){
+      const c = !on ? 0x2a2620 : (m.eff<0.9&&D.pw>0 ? 0xe8a327 : 0x4fbf78);
+      g.userData.lamp.material.color.setHex(c);
+    }
+    if(g.userData.stack&&on&&Math.random()<dt*3){
+      const wp=new THREE.Vector3(); g.userData.stack.getWorldPosition(wp);
+      emitSmoke(wp.x,wp.y+0.6,wp.z);
+    }
+    // flow lens tint
+    if(G.lens&&g.userData.body){
+      let c=0x3a4a5a;
+      if(D.rec||D.ore){
+        if(!on&&D.pw>0&&m.eff<=0.02) c=0x8a2a2a;
+        else if(!on) c=0x2a4a7a;
+        else if(invCount(m.out)>=cap(m)*0.9) c=0x8a5a1a;
+        else c=0x2a6a3a;
+      }
+      g.userData.body.material.color.setHex(c);
+    } else if(g.userData.body){
+      g.userData.body.material.color.setHex(BLD[m.type].col);
+    }
+  }
+  // smoke
+  for(const s of smokeParts){
+    if(s.life>0){ s.life-=dt*0.55; s.y+=s.vy*dt; s.x+=dt*0.25;
+      s.m.position.set(s.x,s.y,s.z);
+      s.m.material.opacity=Math.max(0,s.life*0.32);
+      s.m.scale.setScalar(1+(1-s.life)*2.2);
+      if(s.life<=0) s.m.visible=false; }
+  }
+  // belt items
+  itemUsed=0;
+  const b=base();
+  for(const bl of (b?b.belts:[])){
+    const [dx,dy]=DIRV[bl.dir];
+    for(const it of bl.items){
+      if(itemUsed>=itemPool.length) break;
+      const mm=itemPool[itemUsed++];
+      mm.visible=true;
+      mm.position.set(bl.x+0.5+dx*(it.p-0.5), 0.24, bl.y+0.5+dy*(it.p-0.5));
+      mm.material.color.setHex(ITEMS[it.k]?ITEMS[it.k].col:0xffffff);
+    }
+  }
+  for(let i=itemUsed;i<itemPool.length;i++) if(itemPool[i].visible) itemPool[i].visible=false;
+
+  updCam();
+  renderer.render(scene,cam);
+  if(G.started) uiTick(dt);
+}
+
+/* ---------- AUDIO ---------- */
+let AC=null, masterGain=null, hum=null, humGain=null;
+function initAudio(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  masterGain=AC.createGain(); masterGain.gain.value=0.5; masterGain.connect(AC.destination);
+  // factory hum bed
+  humGain=AC.createGain(); humGain.gain.value=0; humGain.connect(masterGain);
+  const o1=AC.createOscillator(); o1.type="sawtooth"; o1.frequency.value=54;
+  const o2=AC.createOscillator(); o2.type="sine"; o2.frequency.value=81;
+  const lp=AC.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=320; lp.Q.value=2;
+  o1.connect(lp); o2.connect(lp); lp.connect(humGain); o1.start(); o2.start();
+  hum={o1,o2,lp};
+  // noise bed
+  const bufSize=AC.sampleRate*2;
+  const nb=AC.createBuffer(1,bufSize,AC.sampleRate);
+  const d=nb.getChannelData(0);
+  for(let i=0;i<bufSize;i++) d[i]=(Math.random()*2-1)*0.35;
+  const ns=AC.createBufferSource(); ns.buffer=nb; ns.loop=true;
+  const nf=AC.createBiquadFilter(); nf.type="bandpass"; nf.frequency.value=900; nf.Q.value=0.7;
+  const ng=AC.createGain(); ng.gain.value=0.045;
+  ns.connect(nf); nf.connect(ng); ng.connect(humGain); ns.start();
+}
+function sfx(kind){
+  if(!AC) return;
+  const t=AC.currentTime, g=AC.createGain(); g.connect(masterGain);
+  if(kind==="place"){
+    const o=AC.createOscillator(); o.type="square"; o.frequency.setValueAtTime(180,t);
+    o.frequency.exponentialRampToValueAtTime(90,t+0.07);
+    g.gain.setValueAtTime(0.18,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.11);
+    o.connect(g); o.start(t); o.stop(t+0.12);
+  } else if(kind==="belt"){
+    const o=AC.createOscillator(); o.type="triangle"; o.frequency.value=320;
+    g.gain.setValueAtTime(0.07,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.05);
+    o.connect(g); o.start(t); o.stop(t+0.06);
+  } else if(kind==="chime"){
+    [523,659,784].forEach((f,i)=>{
+      const o=AC.createOscillator(); o.type="sine"; o.frequency.value=f;
+      const gg=AC.createGain(); gg.connect(masterGain);
+      gg.gain.setValueAtTime(0,t+i*0.07);
+      gg.gain.linearRampToValueAtTime(0.15,t+i*0.07+0.02);
+      gg.gain.exponentialRampToValueAtTime(0.001,t+i*0.07+0.45);
+      o.connect(gg); o.start(t+i*0.07); o.stop(t+i*0.07+0.5);
+    });
+  } else if(kind==="tech"){
+    const o=AC.createOscillator(); o.type="sawtooth";
+    o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(640,t+0.3);
+    const f=AC.createBiquadFilter(); f.type="lowpass"; f.frequency.value=1600;
+    g.gain.setValueAtTime(0.13,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.4);
+    o.connect(f); f.connect(g); o.start(t); o.stop(t+0.42);
+  } else if(kind==="deny"){
+    const o=AC.createOscillator(); o.type="square"; o.frequency.setValueAtTime(140,t);
+    o.frequency.setValueAtTime(90,t+0.06);
+    g.gain.setValueAtTime(0.13,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.14);
+    o.connect(g); o.start(t); o.stop(t+0.15);
+  } else if(kind==="demo"){
+    const bs=AC.sampleRate*0.25, nb=AC.createBuffer(1,bs,AC.sampleRate), d=nb.getChannelData(0);
+    for(let i=0;i<bs;i++) d[i]=(Math.random()*2-1)*(1-i/bs);
+    const s=AC.createBufferSource(); s.buffer=nb;
+    const f=AC.createBiquadFilter(); f.type="lowpass"; f.frequency.value=800;
+    g.gain.setValueAtTime(0.22,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+    s.connect(f); f.connect(g); s.start(t);
+  }
+}
+function audioAmbient(){
+  if(!AC||!humGain||!base()) return;
+  let busy=0;
+  for(const m of base().machines) if(m.active) busy++;
+  const tgt=Math.min(0.3, busy*0.012);
+  humGain.gain.value += (tgt-humGain.gain.value)*0.05;
+  if(hum) hum.lp.frequency.value = 260+Math.min(520,busy*16);
+}
+</script>
+<script>
+"use strict";
+/* ================= BELTLANDS :: UI + INPUT + NET ================= */
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+function fmt(n){ n=Math.round(n);
+  if(Math.abs(n)>=1e9) return (n/1e9).toFixed(2)+"B";
+  if(Math.abs(n)>=1e6) return (n/1e6).toFixed(2)+"M";
+  if(Math.abs(n)>=1e4) return (n/1e3).toFixed(1)+"k";
+  return n.toLocaleString(); }
+function fmt2(n){ return (Math.round(n*100)/100).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+/* ---------- LOG ---------- */
+function logMsg(txt,cls){
+  const el=document.createElement("div");
+  el.className="lg "+(cls||""); el.textContent=txt;
+  $("#log").appendChild(el);
+  setTimeout(()=>{ el.style.transition="opacity .4s"; el.style.opacity="0";
+    setTimeout(()=>el.remove(),420); }, 5200);
+  while($("#log").children.length>6) $("#log").firstChild.remove();
+}
+
+/* ---------- PANELS ---------- */
+function openPanel(id){
+  $$(".panel").forEach(p=>{ if(p.id!==id) p.classList.remove("open"); });
+  const p=$("#"+id); if(!p) return;
+  const was=p.classList.contains("open");
+  p.classList.toggle("open",!was);
+  if(!was){ if(id==="pTech") renderTech(); if(id==="pMarket") renderMarket();
+    if(id==="pMap") renderMap(); if(id==="pNet") renderNet(); if(id==="pBlue") renderBlue(); }
+  return !was;
+}
+$$("[data-close]").forEach(b=>b.onclick=()=>{ $("#"+b.dataset.close).classList.remove("open"); syncTools(); });
+
+/* ---------- TOOLBAR ---------- */
+function syncTools(){
+  $$(".tool").forEach(t=>{
+    const k=t.dataset.tool; let on=false;
+    if(k==="build") on=$("#pBuild").classList.contains("open");
+    if(k==="tech") on=$("#pTech").classList.contains("open");
+    if(k==="market") on=$("#pMarket").classList.contains("open");
+    if(k==="map") on=$("#pMap").classList.contains("open");
+    if(k==="net") on=$("#pNet").classList.contains("open");
+    if(k==="blue") on=$("#pBlue").classList.contains("open");
+    if(k==="belt") on=G.tool==="belt";
+    if(k==="demolish") on=G.tool==="demolish";
+    if(k==="lens") on=G.lens;
+    t.classList.toggle("on",on);
+  });
+}
+$$(".tool").forEach(t=>t.onclick=()=>doTool(t.dataset.tool));
+function doTool(k){
+  initAudio();
+  if(k==="build"){ G.tool=null; openPanel("pBuild"); renderBuild(); }
+  else if(k==="belt"){ G.tool=G.tool==="belt"?null:"belt"; G.buildPick=null; $("#pBuild").classList.remove("open"); }
+  else if(k==="demolish"){ G.tool=G.tool==="demolish"?null:"demolish"; G.buildPick=null; $("#pBuild").classList.remove("open"); }
+  else if(k==="lens"){ G.lens=!G.lens; logMsg(G.lens?"Flow Lens on. Green runs, blue starves, amber backs up, red has no power.":"Flow Lens off."); }
+  else if(k==="tech") openPanel("pTech");
+  else if(k==="market") openPanel("pMarket");
+  else if(k==="map") openPanel("pMap");
+  else if(k==="net") openPanel("pNet");
+  else if(k==="blue") openPanel("pBlue");
+  setGhost(); syncTools(); updHint();
+}
+
+/* ---------- BUILD MENU ---------- */
+let bcat="extract";
+function renderBuild(){
+  const cc=$("#bcats"); cc.innerHTML="";
+  for(const [k,n] of BCATS){
+    const b=document.createElement("button");
+    b.className="bcat"+(k===bcat?" on":""); b.textContent=n;
+    b.onclick=()=>{bcat=k;renderBuild();}; cc.appendChild(b);
+  }
+  const L=$("#blist"); L.innerHTML="";
+  // belts pinned under Move
+  if(bcat==="move"){
+    BELTS.forEach((B,i)=>{
+      const lock=B.tech&&!G.tech[B.tech];
+      const d=document.createElement("div");
+      d.className="bitem"+(lock?" locked":"");
+      d.innerHTML=`<div class="swatch" style="background:#${B.col.toString(16).padStart(6,"0")}"></div>
+        <div><div class="nm">${B.n}</div><div class="ds">${B.rate}/min through-put${lock?" &mdash; locked":""}</div></div>
+        <div><div class="cost">&sect;${B.cost}</div><div class="pw">per tile</div></div>`;
+      if(!lock) d.onclick=()=>{ G.tool="belt"; G.beltTier=i; G.buildPick=null;
+        $("#pBuild").classList.remove("open"); syncTools(); updHint(); setGhost(); };
+      L.appendChild(d);
+    });
+  }
+  for(const [k,D] of Object.entries(BLD)){
+    if(D.cat!==bcat) continue;
+    const lock=D.tech&&!G.tech[D.tech];
+    const poor=G.scrip<D.cost;
+    const d=document.createElement("div");
+    d.className="bitem"+(lock?" locked":"")+(poor?" poor":"");
+    const pw = D.pw>0?`${D.pw}kW draw`: D.pw<0?`${-D.pw}kW supply`: D.cap?`${D.cap}kW buffer`:"";
+    d.innerHTML=`<div class="swatch" style="background:#${D.col.toString(16).padStart(6,"0")}"></div>
+      <div><div class="nm">${D.n} <span style="color:#5f5548;font-size:10px">${D.w}&times;${D.h}</span></div>
+      <div class="ds">${lock?"Locked &mdash; research "+TECH[D.tech].n:D.d}</div></div>
+      <div><div class="cost">&sect;${fmt(D.cost)}</div><div class="pw">${pw}</div></div>`;
+    if(!lock) d.onclick=()=>{
+      G.buildPick=k; G.tool="build"; $("#pBuild").classList.remove("open");
+      syncTools(); updHint(); setGhost();
+    };
+    L.appendChild(d);
+  }
+  $("#bSub").textContent=`§${fmt(G.scrip)}`;
+}
+
+/* ---------- HINT ---------- */
+function updHint(){
+  const h=$("#hint");
+  if(G.buildPick){
+    const D=BLD[G.buildPick];
+    h.innerHTML=`Placing <b>${D.n}</b> &mdash; §${fmt(D.cost)} &middot; <b>R</b> rotate &middot; <b>Esc</b> cancel`;
+    h.classList.add("on");
+  } else if(G.tool==="belt"){
+    h.innerHTML=`<b>${BELTS[G.beltTier].n}</b> &mdash; drag to lay a run &middot; <b>Esc</b> cancel`;
+    h.classList.add("on");
+  } else if(G.tool==="demolish"){
+    h.innerHTML=`<b>Demolish</b> &mdash; click to remove, half cost back &middot; <b>Esc</b> cancel`;
+    h.classList.add("on");
+  } else h.classList.remove("on");
+}
+
+/* ---------- GHOST ---------- */
+function setGhost(){
+  if(ghost){ scene.remove(ghost); ghost=null; }
+  if(G.buildPick){
+    const D=BLD[G.buildPick];
+    const g=new THREE.Group();
+    const m=new THREE.Mesh(new THREE.BoxGeometry(D.w*0.9,0.9,D.h*0.9),
+      new THREE.MeshBasicMaterial({color:0xe8a327,transparent:true,opacity:0.32}));
+    m.position.y=0.45; g.add(m);
+    const e=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(D.w*0.98,0.92,D.h*0.98)),
+      new THREE.LineBasicMaterial({color:0xe8a327}));
+    e.position.y=0.46; g.add(e);
+    if(D.poleR){
+      const rg=new THREE.RingGeometry(D.poleR+(G.tech.t_grid?4:0)-0.06,D.poleR+(G.tech.t_grid?4:0),40);
+      const r=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:0xe8a327,transparent:true,opacity:0.3,side:THREE.DoubleSide}));
+      r.rotation.x=-Math.PI/2; r.position.y=0.04; g.add(r);
+    }
+    ghost=g; scene.add(g);
+  } else if(G.tool==="belt"){
+    const g=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.16,0.9),
+      new THREE.MeshBasicMaterial({color:0xe8a327,transparent:true,opacity:0.4}));
+    g.position.y=0.08; ghost=g; scene.add(g);
+  }
+}
+
+/* ---------- POINTER ---------- */
+let hoverTile={x:-1,y:-1}, dragging=false, dragBtn=0, lastPt={x:0,y:0}, moved=0;
+let beltDrag=null, ghostRot=0, pinchD=0;
+
+function tileFromEvent(e){
+  const r=renderer.domElement.getBoundingClientRect();
+  const nx=((e.clientX-r.left)/r.width)*2-1, ny=-((e.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera({x:nx,y:ny},cam);
+  const p=new THREE.Vector3();
+  if(!raycaster.ray.intersectPlane(groundPlane,p)) return null;
+  return {x:Math.floor(p.x), y:Math.floor(p.z), fx:p.x, fy:p.z};
+}
+const cv=()=>renderer.domElement;
+
+function onDown(e){
+  initAudio();
+  dragging=true; moved=0; dragBtn=e.button||0;
+  lastPt={x:e.clientX,y:e.clientY};
+  if(dragBtn===0&&G.tool==="belt"){
+    const t=tileFromEvent(e); if(t) beltDrag={sx:t.x,sy:t.y,tiles:[]};
+  }
+}
+function onMove(e){
+  const t=tileFromEvent(e);
+  if(t){ hoverTile=t;
+    if(ghost){
+      if(G.buildPick){ const D=BLD[G.buildPick];
+        ghost.position.set(t.x+D.w/2, 0, t.y+D.h/2);
+        ghost.rotation.y=-ghostRot*Math.PI/2;
+        const ok=footFree(t.x,t.y,D.w,D.h)&&G.scrip>=D.cost;
+        ghost.children.forEach(c=>{ if(c.material) c.material.color.setHex(ok?0xe8a327:0xc9432b); });
+      } else ghost.position.set(t.x+0.5,0,t.y+0.5);
+    }
+  }
+  if(!dragging) return;
+  const dx=e.clientX-lastPt.x, dy=e.clientY-lastPt.y;
+  moved+=Math.abs(dx)+Math.abs(dy);
+  lastPt={x:e.clientX,y:e.clientY};
+  if(beltDrag&&t){
+    const key=t.x+","+t.y;
+    if(!beltDrag.tiles.length||beltDrag.tiles[beltDrag.tiles.length-1].k!==key)
+      beltDrag.tiles.push({x:t.x,y:t.y,k:key});
+    return;
+  }
+  if(dragBtn===2||e.shiftKey){
+    camAz-=dx*0.006; camEl=Math.max(0.22,Math.min(1.45,camEl+dy*0.005));
+  } else if(dragBtn===0&&!G.buildPick&&G.tool!=="demolish"){
+    const s=camDist*0.0016;
+    const fx=Math.cos(camAz), fz=Math.sin(camAz);
+    camTarget.x += (dx*fz - dy*fx)*s;
+    camTarget.z += (-dx*fx - dy*fz)*s;
+    camTarget.x=Math.max(-6,Math.min(GRID+6,camTarget.x));
+    camTarget.z=Math.max(-6,Math.min(GRID+6,camTarget.z));
+  }
+}
+function onUp(e){
+  if(beltDrag){ commitBelt(beltDrag); beltDrag=null; dragging=false; return; }
+  if(dragging&&moved<8&&dragBtn===0){ clickTile(hoverTile); }
+  dragging=false;
+}
+function commitBelt(bd){
+  if(!bd.tiles.length) return;
+  const B=BELTS[G.beltTier]; let placed=0;
+  for(let i=0;i<bd.tiles.length;i++){
+    const t=bd.tiles[i];
+    const nxt=bd.tiles[i+1]||bd.tiles[i-1];
+    let dir=0;
+    if(bd.tiles[i+1]){ dir=dirOf(t,bd.tiles[i+1]); }
+    else if(bd.tiles[i-1]){ dir=dirOf(bd.tiles[i-1],t); }
+    if(t.x<0||t.y<0||t.x>=GRID||t.y>=GRID) continue;
+    if(machAt(t.x,t.y)) continue;
+    const ex=beltAt(t.x,t.y);
+    if(ex){ ex.dir=dir; ex.tier=G.beltTier; continue; }
+    if(G.scrip<B.cost) break;
+    G.scrip-=B.cost; placed++;
+    base().belts.push({x:t.x,y:t.y,dir,tier:G.beltTier,items:[]});
+  }
+  if(placed){ sfx("belt"); syncScene(); tutorCheck(); netPush(); }
+}
+function dirOf(a,b){
+  if(b.x>a.x) return 1; if(b.x<a.x) return 3;
+  if(b.y>a.y) return 2; return 0;
+}
+function clickTile(t){
+  if(!t) return;
+  if(G.buildPick) return placeBuilding(t);
+  if(G.tool==="demolish") return demolish(t);
+  const m=machAt(t.x,t.y);
+  if(m){ G.sel=m; renderInspect(); }
+  else { G.sel=null; $("#inspect").classList.remove("open"); }
+}
+function placeBuilding(t){
+  const k=G.buildPick, D=BLD[k];
+  let w=D.w,h=D.h;
+  if(!footFree(t.x,t.y,w,h)){ logMsg("Something is already there.","bad"); sfx("deny"); return; }
+  if(G.scrip<D.cost){ logMsg(`Not enough scrip. ${D.n} costs §${fmt(D.cost)}.`,"bad"); sfx("deny"); return; }
+  if(D.ore&&!oreAt(t.x,t.y,w,h)){ logMsg("Drills must sit on an ore outcrop.","bad"); sfx("deny"); return; }
+  G.scrip-=D.cost;
+  const m=mk(k,t.x,t.y,ghostRot);
+  base().machines.push(m);
+  rebuildPower(); syncScene(); sfx("place");
+  logMsg(`${D.n} placed. −§${fmt(D.cost)}`);
+  if(!G.seen["b_"+k]){ G.seen["b_"+k]=1; }
+  tutorCheck(); netPush();
+  if(!shiftHeld){ /* keep placing */ }
+}
+function demolish(t){
+  const m=machAt(t.x,t.y);
+  if(m){
+    const D=BLD[m.type];
+    base().machines.splice(base().machines.indexOf(m),1);
+    G.scrip+=Math.round(D.cost*0.5);
+    if(G.sel===m){G.sel=null;$("#inspect").classList.remove("open");}
+    rebuildPower(); syncScene(); sfx("demo");
+    logMsg(`${D.n} removed. +§${fmt(D.cost*0.5)}`); netPush(); return;
+  }
+  const b=beltAt(t.x,t.y);
+  if(b){ base().belts.splice(base().belts.indexOf(b),1);
+    G.scrip+=Math.round(BELTS[b.tier].cost*0.5); syncScene(); sfx("demo"); netPush(); }
+}
+
+cv().addEventListener("pointerdown",onDown);
+addEventListener("pointermove",onMove);
+addEventListener("pointerup",onUp);
+cv().addEventListener("contextmenu",e=>e.preventDefault());
+cv().addEventListener("wheel",e=>{ e.preventDefault();
+  camDist=Math.max(8,Math.min(70,camDist+e.deltaY*0.03)); },{passive:false});
+// touch pinch
+cv().addEventListener("touchstart",e=>{ if(e.touches.length===2){
+  pinchD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  dragging=false; beltDrag=null; } },{passive:true});
+cv().addEventListener("touchmove",e=>{ if(e.touches.length===2){
+  const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+  camDist=Math.max(8,Math.min(70,camDist+(pinchD-d)*0.06)); pinchD=d; } },{passive:true});
+
+let shiftHeld=false;
+addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
+  const k=e.key.toLowerCase();
+  if(k==="shift") shiftHeld=true;
+  if(k==="escape"){ G.buildPick=null; G.tool=null; setGhost(); syncTools(); updHint();
+    $$(".panel").forEach(p=>p.classList.remove("open")); }
+  else if(k==="r"&&G.buildPick){ ghostRot=(ghostRot+1)%4; }
+  else if(k==="r") doTool("tech");
+  else if(k==="b") doTool("build");
+  else if(k==="v") doTool("belt");
+  else if(k==="f") doTool("lens");
+  else if(k==="m") doTool("market");
+  else if(k==="w") doTool("map");
+  else if(k==="p") doTool("blue");
+  else if(k==="c") doTool("net");
+  else if(k==="x") doTool("demolish");
+  else if(k==="1"||k==="2"||k==="3"){ if(G.tool==="belt"){ const i=+k-1;
+    if(!BELTS[i].tech||G.tech[BELTS[i].tech]){ G.beltTier=i; updHint(); } } }
+});
+addEventListener("keyup",e=>{ if(e.key.toLowerCase()==="shift") shiftHeld=false; });
+
+/* ---------- INSPECTOR ---------- */
+function renderInspect(){
+  const m=G.sel; if(!m){ $("#inspect").classList.remove("open"); return; }
+  const D=BLD[m.type];
+  $("#inspect").classList.add("open");
+  $("#iName").textContent=D.n;
+  const B=$("#iBody"); let h="";
+
+  if(D.ore){
+    h+=`<div class="row"><span class="l">Deposit</span><span class="r">${m.ore?ITEMS[m.ore].n:"none"}</span></div>`;
+    h+=`<div class="row"><span class="l">Grade</span><span class="r">${m.grade||1}&times;</span></div>`;
+    const rate=(D.spd*(m.grade||1)*2*60*(D.pw>0?m.eff:1)).toFixed(1);
+    h+=`<div class="row"><span class="l">Output</span><span class="r">${rate}/min</span></div>`;
+  }
+  if(D.pw>0){
+    const pct=Math.round((m.eff||0)*100);
+    h+=`<div class="row"><span class="l">Power</span><span class="r">${m.powered?pct+"%":"none"}</span></div>`;
+    h+=`<div class="bar ${pct<95?(pct<40?"bad":"hot"):""}"><i style="width:${pct}%"></i></div>`;
+    h+=`<div class="row"><span class="l">Draw</span><span class="r">${D.pw}kW</span></div>`;
+    if(m.pwWhy) h+=`<div style="font-size:10px;color:#c9432b;margin:3px 0 5px">${m.pwWhy}. Run a Power Pole to reach a generator.</div>`;
+  }
+  if(D.pw<0){
+    h+=`<div class="row"><span class="l">Supply</span><span class="r">${-D.pw*(G.tech.t_boiler2&&m.type==="boiler"?1.5:1)}kW</span></div>`;
+    h+=`<div class="row"><span class="l">Fuel</span><span class="r">${Math.max(0,m.fuel|0)}s &middot; ${m.inv[D.fuel]||0} ${ITEMS[D.fuel].n}</span></div>`;
+    h+=`<div style="font-size:10px;color:#9a8f7c;margin-top:5px">Belt ${ITEMS[D.fuel].n} in to keep it lit.</div>`;
+  }
+  if(D.cap) h+=`<div class="row"><span class="l">Buffer</span><span class="r">${D.cap}kW</span></div>`;
+  if(D.poleR) h+=`<div class="row"><span class="l">Reach</span><span class="r">${D.poleR+(G.tech.t_grid?4:0)} tiles</span></div>`;
+
+  const inv=Object.entries(m.inv).filter(e=>e[1]>0);
+  const out=Object.entries(m.out||{}).filter(e=>e[1]>0);
+  if(inv.length){ h+=`<div style="margin-top:7px;font-size:10px;color:#9a8f7c">Holding</div>`;
+    inv.forEach(([k,v])=>h+=`<div class="row"><span class="l">${ITEMS[k]?ITEMS[k].n:k}</span><span class="r">${v}</span></div>`); }
+  if(out.length){ h+=`<div style="margin-top:7px;font-size:10px;color:#9a8f7c">Ready to ship</div>`;
+    out.forEach(([k,v])=>h+=`<div class="row"><span class="l">${ITEMS[k].n}</span><span class="r">${v}</span></div>`); }
+  if(D.rec) h+=`<div class="bar ${m.active?"hot":""}"><i style="width:${Math.round(m.prog*100)}%"></i></div>`;
+
+  if(D.rec&&D.rec.length){
+    h+=`<div class="recipes"><div style="font-size:10px;color:#9a8f7c;margin-bottom:4px">Recipe</div>`;
+    D.rec.forEach(r=>{
+      const R=RECIPES[r];
+      const ins=Object.entries(R.in).map(([k,v])=>v+"\u00d7"+ITEMS[k].n).join(" + ");
+      const os=Object.entries(R.out).map(([k,v])=>v+"\u00d7"+(k==="__data"?"Data":ITEMS[k].n)).join(" + ");
+      const perMin=(60/R.t*D.spd).toFixed(0);
+      h+=`<div class="rcp${m.recipe===r?" on":""}" data-r="${r}">${ins} &rarr; ${os}
+        <span style="color:#5f5548"> &middot; ${perMin}/min</span></div>`;
+    });
+    h+=`</div>`;
+  }
+  if(m.type==="filter"){
+    h+=`<div class="recipes"><label>Only pass</label><select id="fsel">
+      <option value="">anything</option>
+      ${IK.map(k=>`<option value="${k}" ${m.filterItem===k?"selected":""}>${ITEMS[k].n}</option>`).join("")}
+      </select></div>`;
+  }
+  h+=`<div class="ibtns"><button class="ibtn" id="ibDemo">Demolish</button></div>`;
+  B.innerHTML=h;
+  B.querySelectorAll(".rcp").forEach(r=>r.onclick=()=>{
+    m.recipe=r.dataset.r; m.prog=0; m.inv={}; renderInspect(); netPush(); });
+  const fs=B.querySelector("#fsel"); if(fs) fs.onchange=()=>{ m.filterItem=fs.value||null; netPush(); };
+  B.querySelector("#ibDemo").onclick=()=>{ demolish({x:m.x,y:m.y}); };
+}
+$("#iClose").onclick=()=>{ G.sel=null; $("#inspect").classList.remove("open"); };
+
+/* ---------- TECH ---------- */
+let tbr="C";
+function renderTech(){
+  $("#tSub").textContent=`${G.data} research data`;
+  const c=$("#techcol"); c.innerHTML="";
+  for(const [k,B] of Object.entries(BRANCH)){
+    const done=Object.keys(TECH).filter(t=>TECH[t].b===k&&G.tech[t]).length;
+    const tot=Object.keys(TECH).filter(t=>TECH[t].b===k).length;
+    const d=document.createElement("div");
+    d.className="tbr"+(k===tbr?" on":"");
+    d.innerHTML=`<div class="tn" style="color:${B.col}">${B.n}</div><div class="tc">${done} of ${tot}</div>`;
+    d.onclick=()=>{tbr=k;renderTech();}; c.appendChild(d);
+  }
+  const M=$("#techmain"); M.innerHTML="";
+  for(const [k,T] of Object.entries(TECH)){
+    if(T.b!==tbr) continue;
+    const done=!!G.tech[k];
+    const ready=T.req.every(r=>G.tech[r]);
+    const afford=G.data>=T.cost;
+    const d=document.createElement("div");
+    d.className="tnode "+(done?"done":ready?"avail":"lock");
+    const reqTxt=T.req.length?` &middot; needs ${T.req.map(r=>TECH[r].n).join(", ")}`:"";
+    d.innerHTML=`<div><div class="tt">${T.n}</div>
+      <div class="te">${T.e}${done?"":reqTxt}</div></div>
+      <div class="tb">${done?"unlocked":T.cost+" data"}</div>`;
+    if(!done&&ready) d.onclick=()=>{
+      if(!afford){ logMsg(`Need ${T.cost} data. You have ${G.data}.`,"warn"); sfx("deny"); return; }
+      G.data-=T.cost; G.tech[k]=true; sfx("tech");
+      logMsg(`Researched ${T.n}: ${T.e}`,"tech");
+      rebuildPower(); renderTech(); renderBuild(); tutorCheck(); netPush();
+    };
+    M.appendChild(d);
+  }
+}
+
+/* ---------- MARKET ---------- */
+let mtab="prices";
+$$(".mtab").forEach(t=>t.onclick=()=>{ mtab=t.dataset.mt;
+  $$(".mtab").forEach(x=>x.classList.toggle("on",x===t)); renderMarket(); });
+function renderMarket(){
+  const B=$("#mbody");
+  $("#mSub").textContent=`day ${G.day}`;
+  if(mtab==="prices"){
+    let h=`<table><thead><tr><th>Good</th><th>Base</th><th>Now</th><th>Saturation</th><th>Sold</th></tr></thead><tbody>`;
+    for(const k of IK){
+      const m=G.market[k], p=priceOf(k);
+      const cls=p>=ITEMS[k].base*0.97?"up":"dn";
+      h+=`<tr><td>${ITEMS[k].n}</td><td style="color:#9a8f7c">&sect;${fmt2(ITEMS[k].base)}</td>
+        <td class="${cls}">&sect;${fmt2(p)}</td>
+        <td><span class="sat"><i style="width:${Math.round(m.sat*100)}%"></i></span></td>
+        <td style="color:#9a8f7c">${fmt(m.sold)}</td></tr>`;
+    }
+    h+=`</tbody></table><div style="padding:10px;font-size:10px;color:#9a8f7c;line-height:1.7">
+      Dumping the same good drives its price down and it recovers slowly. Diversify, or move up the chain.</div>`;
+    B.innerHTML=h;
+  } else if(mtab==="contracts"){
+    let h="";
+    refreshOffers();
+    const active=G.contracts.filter(c=>!c.done);
+    h+=`<div style="font-size:10px;color:#9a8f7c;margin-bottom:8px">
+      Contracts pay above spot and award research data. Belt goods into a Loading Dock to fill them.</div>`;
+    for(const c of offerPool){
+      const taken=G.contracts.some(x=>x.id===c.id);
+      h+=`<div class="ctrcard${taken?" taken":""}">
+        <h4>${c.title}</h4>
+        <p>${c.city} &middot; &sect;${fmt2(c.rate)}/unit (spot &sect;${fmt2(priceOf(c.item))})
+        &middot; &sect;${fmt(c.bonus)} completion bonus &middot; ${c.data} data</p>
+        <button class="take${taken?" off":""}" data-c="${c.id}">${taken?"accepted":"Accept"}</button></div>`;
+    }
+    B.innerHTML=h;
+    B.querySelectorAll(".take").forEach(b=>b.onclick=()=>{
+      if(b.classList.contains("off")) return;
+      if(G.contracts.filter(c=>!c.done).length>=3){ logMsg("Three active contracts is the limit.","warn"); return; }
+      const c=offerPool.find(x=>x.id===b.dataset.c);
+      G.contracts.push(c); logMsg(`Accepted: ${c.title} for ${c.city}.`,"good");
+      renderMarket(); tutorCheck(); netPush();
+    });
+  } else {
+    let tot=0, rows="";
+    const agg={};
+    for(const k in G.bases) for(const m of G.bases[k].machines){
+      for(const src of [m.inv,m.out||{}]) for(const it in src) agg[it]=(agg[it]||0)+src[it];
+    }
+    if(base()) for(const bl of base().belts) for(const it of bl.items) agg[it.k]=(agg[it.k]||0)+1;
+    for(const k of IK){ if(!agg[k]) continue;
+      const v=agg[k]*priceOf(k); tot+=v;
+      rows+=`<tr><td>${ITEMS[k].n}</td><td>${fmt(agg[k])}</td><td>&sect;${fmt(v)}</td></tr>`; }
+    B.innerHTML=`<table><thead><tr><th>Good</th><th>Units held</th><th>Spot value</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan=3 style="color:#9a8f7c">Nothing on hand.</td></tr>'}</tbody></table>
+      <div style="padding:10px;font-size:11px">Total goods on hand: <b style="color:#e8a327">&sect;${fmt(tot)}</b></div>`;
+  }
+}
+
+/* ---------- MAP ---------- */
+function renderMap(){
+  const g=$("#mapgrid"); g.innerHTML="";
+  $("#wSub").textContent=G.tech.t_deed?"deed granted":"one site";
+  for(const [k,S] of Object.entries(SITES)){
+    const owned=G.unlockedSites[k], here=G.site===k;
+    const d=document.createElement("div");
+    d.className="site"+(here?" active":"");
+    let ores=Object.entries(S.ores).map(([o,c])=>`${ITEMS[o].n} &times;${c}`).join(" &middot; ");
+    d.innerHTML=`<h3>${S.n}</h3><div class="biome">${S.biome} &middot; grade ${S.grade}&times;</div>
+      <div class="st">${S.d}</div>
+      <div class="st" style="margin-top:6px;color:#e8a327">${ores}</div>
+      <button class="gobtn${owned?"":" off"}" data-s="${k}">
+        ${here?"You are here":owned?"Travel here":G.tech.t_deed?`Claim &mdash; §${fmt(S.cost)}`:"Needs Land Deed research"}</button>`;
+    g.appendChild(d);
+  }
+  g.querySelectorAll(".gobtn").forEach(b=>b.onclick=()=>{
+    const k=b.dataset.s;
+    if(G.site===k) return;
+    if(G.unlockedSites[k]) return switchSite(k);
+    if(!G.tech.t_deed){ logMsg("Research Land Deed first.","warn"); sfx("deny"); return; }
+    if(G.scrip<SITES[k].cost){ logMsg(`Need §${fmt(SITES[k].cost)} for the deed.`,"bad"); sfx("deny"); return; }
+    G.scrip-=SITES[k].cost; G.unlockedSites[k]=true; G.bases[k]=newBase(k);
+    logMsg(`${SITES[k].n} claimed. Build a Freight Terminal at both ends to link them.`,"good");
+    sfx("chime"); switchSite(k); renderMap();
+  });
+  renderRoute();
+}
+function renderRoute(){
+  const R=$("#routebox");
+  const owned=Object.keys(G.unlockedSites);
+  if(owned.length<2){ R.innerHTML=`<div class="route" style="color:#9a8f7c">
+    Claim a second site to open freight routes.</div>`; return; }
+  const F=G.freight;
+  const hasTerm=k=>G.bases[k]&&G.bases[k].machines.some(m=>m.type==="terminal");
+  R.innerHTML=`<div class="route"><h4>Freight route</h4>
+    <div class="f2">
+      <div><label>From</label><select id="rFrom">${owned.map(k=>`<option value="${k}" ${F.from===k?"selected":""}>${SITES[k].n}${hasTerm(k)?"":" (no terminal)"}</option>`).join("")}</select></div>
+      <div><label>To</label><select id="rTo">${owned.map(k=>`<option value="${k}" ${F.to===k?"selected":""}>${SITES[k].n}${hasTerm(k)?"":" (no terminal)"}</option>`).join("")}</select></div>
+    </div>
+    <div class="f2">
+      <div><label>Ship</label><select id="rItem"><option value="">nothing</option>
+        ${IK.map(k=>`<option value="${k}" ${F.item===k?"selected":""}>${ITEMS[k].n}</option>`).join("")}</select></div>
+      <div><label>Rate: <span id="rRateV">${F.rate}</span>/min</label>
+        <input type="range" id="rRate" min="0" max="240" step="10" value="${F.rate}"></div>
+    </div>
+    <div style="font-size:10px;color:#9a8f7c">In transit: ${Math.floor(F.buf)} units.
+    Both ends need a Freight Terminal. Belt goods into the sending terminal; they arrive in the receiving one.</div></div>`;
+  const upd=()=>{ F.from=$("#rFrom").value; F.to=$("#rTo").value;
+    F.item=$("#rItem").value||null; F.rate=+$("#rRate").value;
+    $("#rRateV").textContent=F.rate; netPush(); };
+  ["rFrom","rTo","rItem"].forEach(i=>$("#"+i).onchange=upd);
+  $("#rRate").oninput=upd;
+}
+function switchSite(k){
+  G.site=k; G.sel=null; $("#inspect").classList.remove("open");
+  clearScene(); syncScene(); rebuildPower();
+  camTarget.set(GRID/2,0,GRID/2);
+  $("#vBase").querySelector(".v").textContent=SITES[k].n.split(" ")[0];
+  logMsg(`Now at ${SITES[k].n}.`);
+  renderMap();
+}
+
+/* ---------- BLUEPRINT ---------- */
+function renderBlue(){
+  const B=$("#bluebody");
+  B.innerHTML=`<div style="font-size:11px;color:#9a8f7c;margin-bottom:9px">
+    Save this site's whole layout as a code, then stamp it at another site or send it to a friend.
+    Stamping charges the full build cost.</div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="ibtn" id="bpExport">Copy this site</button>
+      <button class="ibtn" id="bpStamp">Stamp from code</button></div>
+    <label>Blueprint code</label>
+    <textarea id="bpText" style="width:100%;height:130px;background:#100e0b;border:1px solid #332b22;
+      color:#e8dcc6;font-family:inherit;font-size:10px;padding:6px" placeholder="paste a code here"></textarea>`;
+  $("#bpExport").onclick=()=>{
+    const b=base();
+    const data={m:b.machines.map(m=>[m.type,m.x,m.y,m.rot||0,m.recipe||""]),
+                b:b.belts.map(x=>[x.x,x.y,x.dir,x.tier])};
+    $("#bpText").value=btoa(JSON.stringify(data));
+    logMsg("Layout copied to the box. Select and copy it.","good");
+  };
+  $("#bpStamp").onclick=()=>{
+    try{
+      const d=JSON.parse(atob($("#bpText").value.trim()));
+      let cost=0;
+      d.m.forEach(a=>cost+=BLD[a[0]]?BLD[a[0]].cost:0);
+      d.b.forEach(a=>cost+=BELTS[a[3]].cost);
+      if(G.scrip<cost){ logMsg(`Stamping costs §${fmt(cost)}. You have §${fmt(G.scrip)}.`,"bad"); sfx("deny"); return; }
+      let n=0;
+      for(const a of d.m){
+        const D=BLD[a[0]]; if(!D) continue;
+        if(D.tech&&!G.tech[D.tech]) continue;
+        if(!footFree(a[1],a[2],D.w,D.h)) continue;
+        if(D.ore&&!oreAt(a[1],a[2],D.w,D.h)) continue;
+        G.scrip-=D.cost;
+        const m=mk(a[0],a[1],a[2],a[3]); if(a[4]) m.recipe=a[4];
+        base().machines.push(m); n++;
+      }
+      for(const a of d.b){
+        if(machAt(a[0],a[1])||beltAt(a[0],a[1])) continue;
+        if(a[0]<0||a[1]<0||a[0]>=GRID||a[1]>=GRID) continue;
+        G.scrip-=BELTS[a[3]].cost;
+        base().belts.push({x:a[0],y:a[1],dir:a[2],tier:a[3],items:[]});
+      }
+      rebuildPower(); syncScene(); sfx("chime");
+      logMsg(`Stamped ${n} machines. Drills only land where there is ore.`,"good"); netPush();
+    }catch(e){ logMsg("That code will not read.","bad"); sfx("deny"); }
+  };
+}
+
+/* ---------- NET (PeerJS) ---------- */
+function renderNet(){
+  const B=$("#netbody");
+  if(!G.peer){
+    B.innerHTML=`<div style="font-size:11px;color:#9a8f7c;line-height:1.7;margin-bottom:11px">
+      Co-op runs peer to peer. The host simulates the works; guests build into the same site.
+      Fine for two to four people on good connections. It is not a persistent server, so when
+      the host leaves, the session ends.</div>
+      <div style="display:flex;gap:6px">
+        <button class="ibtn" id="nHost">Host a works</button>
+        <button class="ibtn" id="nJoinB">Join by code</button></div>
+      <div id="njoin" class="hidden" style="margin-top:9px">
+        <label>Host code</label><input type="text" id="nCode" placeholder="beltlands-xxxx">
+        <button class="ibtn" id="nGo" style="margin-top:6px">Connect</button></div>`;
+    $("#nHost").onclick=hostGame;
+    $("#nJoinB").onclick=()=>$("#njoin").classList.toggle("hidden");
+    $("#nGo").onclick=()=>joinGame($("#nCode").value.trim());
+  } else {
+    B.innerHTML=`<div class="row"><span class="l">Role</span><span class="r">${G.host?"host":"guest"}</span></div>
+      <div class="row"><span class="l">Your code</span><span class="r" style="color:#e8a327">${G.peer.id||"…"}</span></div>
+      <div class="row"><span class="l">Connected</span><span class="r">${G.conn.length}</span></div>
+      <div style="font-size:10px;color:#9a8f7c;margin-top:9px">
+      ${G.host?"Share the code above. Guests build into your site and spend the shared treasury.":
+        "You are building into the host's site. Everything is shared."}</div>`;
+  }
+}
+function hostGame(){
+  if(typeof Peer==="undefined"){ logMsg("Networking library did not load.","bad"); return; }
+  const id="beltlands-"+Math.random().toString(36).slice(2,6);
+  G.peer=new Peer(id); G.host=true;
+  G.peer.on("open",i=>{ logMsg(`Hosting as ${i}. Share that code.`,"good"); renderNet(); });
+  G.peer.on("error",e=>{ logMsg("Network error: "+e.type,"bad"); });
+  G.peer.on("connection",c=>{
+    G.conn.push(c);
+    c.on("open",()=>{ logMsg("An operator joined.","good"); $("#peerdot").classList.add("on");
+      c.send({t:"full",s:serialize()}); renderNet(); });
+    c.on("data",d=>onNetData(d,c));
+    c.on("close",()=>{ G.conn=G.conn.filter(x=>x!==c); logMsg("An operator left.","warn");
+      if(!G.conn.length)$("#peerdot").classList.remove("on"); renderNet(); });
+  });
+  renderNet();
+}
+function joinGame(code){
+  if(!code){ logMsg("Enter a host code.","warn"); return; }
+  if(typeof Peer==="undefined"){ logMsg("Networking library did not load.","bad"); return; }
+  G.peer=new Peer(); G.host=false;
+  G.peer.on("open",()=>{
+    const c=G.peer.connect(code,{reliable:true});
+    G.conn=[c];
+    c.on("open",()=>{ logMsg("Connected to the host.","good");
+      $("#peerdot").classList.add("on"); startGame(true); renderNet(); });
+    c.on("data",d=>onNetData(d,c));
+    c.on("close",()=>{ logMsg("Host disconnected. You are on your own copy now.","warn");
+      $("#peerdot").classList.remove("on"); G.conn=[]; renderNet(); });
+    c.on("error",()=>logMsg("Could not reach that host.","bad"));
+  });
+  G.peer.on("error",e=>logMsg("Network error: "+e.type,"bad"));
+  renderNet();
+}
+let netTimer=0, netDirty=false;
+function netPush(){ netDirty=true; }
+function netFlush(){
+  if(!netDirty||!G.conn.length) return;
+  netDirty=false;
+  const pkt={t:"full",s:serialize()};
+  G.conn.forEach(c=>{ try{c.send(pkt);}catch(e){} });
+}
+function onNetData(d,c){
+  if(d.t==="full"){ deserialize(d.s); clearScene(); syncScene(); rebuildPower(); }
+  else if(d.t==="chat") logMsg(d.m);
+}
+
+/* ---------- SAVE ---------- */
+function serialize(){
+  const bs={};
+  for(const k in G.bases){
+    const b=G.bases[k];
+    bs[k]={next:b.next, ores:b.ores,
+      machines:b.machines.map(m=>({id:m.id,type:m.type,x:m.x,y:m.y,rot:m.rot,w:m.w,h:m.h,
+        inv:m.inv,out:m.out,recipe:m.recipe,ore:m.ore,grade:m.grade,fuel:m.fuel,filterItem:m.filterItem})),
+      belts:b.belts.map(x=>({x:x.x,y:x.y,dir:x.dir,tier:x.tier,items:x.items}))};
+  }
+  return {scrip:G.scrip,data:G.data,day:G.day,t:G.t,site:G.site,tech:G.tech,
+    market:G.market,contracts:G.contracts,unlockedSites:G.unlockedSites,
+    freight:G.freight,bases:bs,vess:G.vess,seen:G.seen};
+}
+function deserialize(s){
+  Object.assign(G,{scrip:s.scrip,data:s.data,day:s.day,t:s.t,site:s.site,tech:s.tech,
+    market:s.market,contracts:s.contracts,unlockedSites:s.unlockedSites,
+    freight:s.freight,vess:s.vess||0,seen:s.seen||{}});
+  G.bases={};
+  for(const k in s.bases){
+    const b=s.bases[k];
+    G.bases[k]={next:b.next, ores:b.ores, machines:b.machines, belts:b.belts};
+    for(const m of G.bases[k].machines){ m.prog=0; m.active=false; m.eff=1; m.out=m.out||{}; }
+  }
+  $("#vBase").querySelector(".v").textContent=SITES[G.site].n.split(" ")[0];
+}
+function save(){
+  try{ localStorage.setItem("beltlands_v1", JSON.stringify(serialize())); }catch(e){}
+}
+function load(){
+  try{ const s=localStorage.getItem("beltlands_v1"); if(!s) return false;
+    deserialize(JSON.parse(s)); return true; }catch(e){ return false; }
+}
+
+/* ---------- TUTORIAL ---------- */
+const VESS=[
+ {say:"That outcrop is ironstone and nobody has claimed it. Put a Hand Drill on it. Build menu, Extract.",
+  task:"Place a Hand Drill on ore", ok:()=>base().machines.some(m=>m.type==="drill"&&m.ore)},
+ {say:"A drill fills its own hopper and then stops. It needs somewhere to send the ore. Lay belt from the drill to a Bloom Smelter, and feed the smelter coal too. Coal is the black outcrop.",
+  task:"Build a Bloom Smelter", ok:()=>base().machines.some(m=>m.type==="smelter")},
+ {say:"Belt runs out of a machine's back and into the next one's face. Drag a belt line from your drill into the smelter.",
+  task:"Lay some belt", ok:()=>base().belts.length>=3},
+ {say:"Now sell something. A Loading Dock takes anything you belt into it and moves it at spot price. Put one at the end of your line.",
+  task:"Build a Loading Dock", ok:()=>base().machines.some(m=>m.type==="dock")},
+ {say:"Spot price is the floor, not the goal. Take a contract off the exchange. They pay well above spot and they hand you research data, which is the only way you get better machines.",
+  task:"Accept a contract", ok:()=>G.contracts.length>0},
+ {say:"Data buys tech. Powered Extraction is cheap and triples what a drill pulls. Research it, then replace that hand drill.",
+  task:"Research anything", ok:()=>Object.keys(G.tech).length>0},
+ {say:"Powered machines need a grid. A Coal Boiler makes forty kilowatts as long as you belt coal into it. Watch the power readout at the top; amber means you are short and everything slows down together.",
+  task:"Build a Coal Boiler", ok:()=>base().machines.some(m=>m.type==="boiler")},
+ {say:"That is the whole game. Widen what sells, watch the exchange for saturation, and push up the chain: plate, steel, frames, motors. When you can afford a Land Deed, the Ridgeback has seams three times richer than this mud. I will stop talking now.",
+  task:"Reach §25,000", ok:()=>G.scrip>=25000},
+];
+function tutorCheck(){
+  if(G.vess>=VESS.length){ $("#vess").classList.remove("on"); return; }
+  if(!base()) return;
+  const step=VESS[G.vess];
+  let done=false;
+  try{ done=step.ok(); }catch(e){ done=false; }
+  if(done){ G.vess++; sfx("chime");
+    if(G.vess>=VESS.length){ $("#vess").classList.remove("on");
+      logMsg("Vess has nothing more to teach you.","good"); return; }
+    showVess();
+  }
+}
+function showVess(){
+  const s=VESS[G.vess]; if(!s) return;
+  $("#vessSay").textContent=s.say;
+  $("#vessTask").innerHTML=`<span>${s.task}</span><span style="color:#9a8f7c">${G.vess+1} of ${VESS.length}</span>`;
+  $("#vess").classList.add("on");
+}
+$("#vessDis").onclick=()=>$("#vess").classList.remove("on");
+
+/* ---------- UI TICK ---------- */
+let uiAcc=0, saveAcc=0;
+function uiTick(dt){
+  uiAcc+=dt; saveAcc+=dt; netTimer+=dt;
+  audioAmbient();
+  if(netTimer>0.5&&G.host){ netFlush(); netTimer=0; }
+  if(saveAcc>12){ save(); saveAcc=0; }
+  if(uiAcc<0.2) return; uiAcc=0;
+
+  $("#vScrip").querySelector(".v").textContent="§"+fmt(G.scrip);
+  $("#vScrip").classList.toggle("bad",G.scrip<0);
+  const [d,s]=gridTotals();
+  const pv=$("#vPower"); pv.querySelector(".v").textContent=`${Math.round(d)}/${Math.round(s)}kW`;
+  pv.classList.toggle("warn",d>s&&s>0); pv.classList.toggle("bad",d>0&&s<=0);
+  $("#vData").querySelector(".v").textContent=fmt(G.data);
+  $("#vRate").querySelector(".v").textContent="§"+fmt(G.income)+"/m";
+  $("#clock").textContent="day "+G.day;
+
+  // contracts
+  const C=$("#contracts"); C.innerHTML="";
+  for(const c of G.contracts.filter(x=>!x.done).slice(0,3)){
+    const pct=Math.round(c.have/c.need*100);
+    const d=document.createElement("div");
+    d.className="ctr"+(pct>=100?" ok":"");
+    d.innerHTML=`<div class="cn"><b>${ITEMS[c.item].n}</b><span>${fmt(c.have)}/${fmt(c.need)}</span></div>
+      <div class="cd">${c.city} &middot; §${fmt2(c.rate)}/unit</div>
+      <div class="cbar"><i style="width:${Math.min(100,pct)}%"></i></div>`;
+    C.appendChild(d);
+  }
+  G.contracts=G.contracts.filter(c=>!c.done||c._keep);
+  if(G.sel) renderInspect();
+  if($("#pBuild").classList.contains("open")) $("#bSub").textContent=`§${fmt(G.scrip)}`;
+  if($("#pTech").classList.contains("open")) $("#tSub").textContent=`${G.data} research data`;
+  tutorCheck();
+}
+
+/* ---------- BOOT ---------- */
+function startGame(fromNet){
+  $("#title").classList.add("hidden");
+  G.started=true;
+  if(!fromNet){ clearScene(); syncScene(); rebuildPower(); }
+  refreshOffers(); initAudio();
+  camTarget.set(GRID/2,0,GRID/2);
+  if(G.vess<VESS.length) showVess();
+  logMsg("Kettleford Works. Drag to pan, right-drag to orbit, scroll to zoom.");
+}
+function newGame(){
+  Object.assign(G,{scrip:2500,data:0,day:1,t:0,site:"kettleford",tech:{},contracts:[],
+    unlockedSites:{kettleford:true},vess:0,seen:{},income:0,
+    freight:{from:null,to:null,item:null,rate:0,buf:0}});
+  G.bases={kettleford:newBase("kettleford")};
+  initMarket(); offerPool=[];
+  startGame();
+}
+$("#tNew").onclick=()=>{ initAudio(); newGame(); };
+$("#tCont").onclick=()=>{ initAudio();
+  if(load()){ startGame(); logMsg("Works restored.","good"); }
+  else { logMsg("No saved works found. Starting fresh."); newGame(); } };
+$("#tJoin").onclick=()=>{ initAudio();
+  if(!G.bases.kettleford){ G.bases={kettleford:newBase("kettleford")}; initMarket(); }
+  $("#title").classList.add("hidden"); G.started=true; clearScene(); syncScene();
+  openPanel("pNet"); $("#njoin").classList.remove("hidden"); syncTools(); };
+
+initGL(); initSmoke(); initMarket();
+G.bases={kettleford:newBase("kettleford")};
+syncScene(); updCam();
+requestAnimationFrame(animate);
+addEventListener("beforeunload",()=>{ if(G.started) save(); });
+</script>
+</body>
+</html>
